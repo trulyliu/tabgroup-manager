@@ -533,6 +533,9 @@ function handleGroupRemoved(group) {
     title: group.title,
     color: group.color,
     collapsed: group.collapsed,
+    // Chrome may collapse a group just before removing it, so the snapshot is
+    // the reliable source for whether it was expanded.
+    wasExpanded: known ? known.collapsed === false : group.collapsed === false,
     tabIds,
   };
   const lockKey = `${group.windowId}:${group.id}`;
@@ -679,7 +682,21 @@ async function attemptPinnedRestore(snapshot, attempt) {
     color: snapshot.color,
   });
 
-  if (snapshot.collapsed) {
+  // A protected group that was expanded when its last real tab closed should
+  // hand focus back to the default group instead of whichever group Chrome
+  // happened to activate (often another pinned group).
+  const handoffToDefault =
+    snapshot.wasExpanded &&
+    snapshot.title !== currentSettings.defaultGroupTitle &&
+    (await focusDefaultGroup(snapshot.windowId, groupId));
+
+  if (handoffToDefault) {
+    try {
+      await updateCollapsed(groupId, true);
+    } catch {
+      // Chrome refuses to collapse an active group; the blank tab is inactive.
+    }
+  } else if (snapshot.collapsed) {
     try {
       const groupTabs = await chrome.tabs.query({ windowId: snapshot.windowId, groupId });
       if (!groupTabs.some((tab) => tab.active)) {
@@ -942,6 +959,37 @@ async function headerNewTab(group) {
     // Group vanished; the normal default-group pass handles the orphan tab.
   }
   schedule(group.windowId);
+}
+
+async function focusDefaultGroup(windowId, excludeGroupId = null) {
+  let tabs = [];
+  let groups = [];
+  try {
+    [tabs, groups] = await Promise.all([
+      chrome.tabs.query({ windowId }),
+      chrome.tabGroups.query({ windowId }),
+    ]);
+  } catch {
+    return false;
+  }
+  const defaultGroup = groups.find(
+    (entry) =>
+      entry.id !== excludeGroupId &&
+      entry.title === currentSettings.defaultGroupTitle &&
+      tabs.some((tab) => tab.groupId === entry.id),
+  );
+  if (!defaultGroup) return false;
+  const pick = pickGroupTab(tabs, defaultGroup.id);
+  if (!pick) return false;
+
+  lastActiveGroupByWindow.set(windowId, defaultGroup.id);
+  try {
+    await chrome.tabs.update(pick.id, { active: true });
+  } catch {
+    return false;
+  }
+  schedule(windowId);
+  return true;
 }
 
 async function headerCollapseToDefault(group) {

@@ -526,3 +526,57 @@ test("collapse action does nothing when the default group is clicked", async () 
   assert.equal(findGroup(100).collapsed, false);
   assert.equal(tabs.find((entry) => entry.active)?.groupId, 100);
 });
+
+test("restoring an expanded pinned group hands focus back to the default group", async () => {
+  const defaultGroup = findGroup(100);
+  defaultGroup.collapsed = true;
+  groups.push({ id: 400, windowId: 1, title: "Beta", color: "red", collapsed: true });
+  tabs.push({
+    id: 8,
+    windowId: 1,
+    index: 4,
+    groupId: 400,
+    pinned: false,
+    active: false,
+    lastAccessed: 50,
+    url: "https://example.com/beta",
+  });
+  await chrome.storage.sync.set({
+    settings: {
+      ...settings,
+      pinnedGroups: [
+        { title: "Alpha", color: "blue" },
+        { title: "Beta", color: "red" },
+      ],
+    },
+  });
+  await sleep(350);
+
+  const alpha = findGroup(300);
+  alpha.collapsed = false;
+  for (const entry of tabs) entry.active = false;
+  findTab(4).active = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 4 });
+  await sleep(250);
+
+  // Close Alpha's last tab: Chrome chooses Beta or the pinned tab, but the
+  // recreation must focus the default group instead.
+  tabs.splice(tabs.indexOf(findTab(4)), 1);
+  groups.splice(groups.indexOf(alpha), 1);
+  chrome.tabGroups.onRemoved.fire({
+    id: 300,
+    windowId: 1,
+    title: "Alpha",
+    color: "blue",
+    collapsed: false,
+  });
+  await sleep(1000);
+
+  const recreated = groups.find((entry) => entry.title === "Alpha");
+  assert.ok(recreated);
+  assert.equal(recreated.collapsed, true);
+  assert.equal(tabs.filter((entry) => entry.groupId === recreated.id).length, 1);
+  assert.equal(findGroup(100).collapsed, false);
+  assert.equal(tabs.find((entry) => entry.active)?.groupId, 100);
+});
