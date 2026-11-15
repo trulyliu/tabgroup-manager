@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>标签组管理器设置</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>标签组管理器</h1>
+      <p class="hint">以下规则按窗口生效：分组标签页在前、只展开一个分组、新标签进入展开的分组。</p>
+
+      <section>
+        <h2>总开关</h2>
+        <label class="row">
+          <input type="checkbox" id="enabled" />
+          <span>启用扩展</span>
+        </label>
+      </section>
+
+      <section>
+        <h2>行为</h2>
+        <label class="row">
+          <input type="checkbox" id="groupsFirst" />
+          <span>分组标签页排在最前</span>
+        </label>
+        <label class="row">
+          <input type="checkbox" id="defaultGroup" />
+          <span>未分组标签页放入默认分组</span>
+        </label>
+        <label class="row">
+          <input type="checkbox" id="singleExpanded" />
+          <span>同时只展开一个分组</span>
+        </label>
+        <label class="row">
+          <input type="checkbox" id="keepLastWhenPinned" />
+          <span>激活固定标签页时保留上次展开的分组</span>
+        </label>
+        <label class="row">
+          <input type="checkbox" id="externalNewTabInActiveGroup" />
+          <span>外部程序打开的新标签页进入当前展开的分组</span>
+        </label>
+        <label class="row">
+          <input type="checkbox" id="expandHeaderClick" />
+          <span>点击分组标题展开时切换到该分组最近的标签页</span>
+        </label>
+      </section>
+
+      <section>
+        <h2>默认分组</h2>
+        <label class="row">
+          <span>名称</span>
+          <input type="text" id="defaultGroupTitle" maxlength="30" />
+        </label>
+        <label class="row">
+          <span>颜色</span>
+          <select id="defaultGroupColor"></select>
+        </label>
+      </section>
+
+      <section>
+        <h2>钉住的分组</h2>
+        <p class="hint">按标题识别，同名分组会一起钉住；列表顺序即标签栏顺序。</p>
+        <ul id="pinnedList" class="pin-list"></ul>
+        <p id="emptyPinned" class="hint">还没有钉住的分组。</p>
+        <div class="pin-controls">
+          <select id="openGroups" aria-label="当前打开的分组"></select>
+          <button type="button" id="pinButton">钉住</button>
+        </div>
+        <p class="hint">
+          Chrome 不提供禁止删除分组的 API。钉住通过“始终保持非空”实现：最后一个标签页关闭后，
+          扩展会用同标题、同颜色的分组重建一个未激活的空白新标签页。真实标签页不会被重新打开。
+        </p>
+        <p class="hint">
+          钉住顺序始终生效；由于排序会把所有分组放到未分组标签页之前，因此钉住顺序同时意味着“分组在前”。
+        </p>
+      </section>
+
+      <section class="actions">
+        <button type="button" id="normalizeButton">立即整理</button>
+        <span id="status" class="status" role="status"></span>
+      </section>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

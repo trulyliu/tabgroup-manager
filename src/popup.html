@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>标签组管理器</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>标签组管理器</h1>
+      <label class="toggle">
+        <input type="checkbox" id="enabled" />
+        <span>启用</span>
+      </label>
+    </header>
+
+    <dl class="stats">
+      <div>
+        <dt>分组数</dt>
+        <dd id="groupCount">–</dd>
+      </div>
+      <div>
+        <dt>当前分组</dt>
+        <dd id="activeGroup">–</dd>
+      </div>
+    </dl>
+
+    <div class="actions">
+      <button type="button" id="normalizeButton">立即整理</button>
+      <button type="button" id="optionsButton" class="secondary">设置</button>
+    </div>
+    <p id="status" class="status" role="status"></p>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
