@@ -48,3 +48,17 @@ test("drops the removed placeholder and boolean keys", () => {
   assert.equal("suppressCollapseNewTab" in settings, false);
   assert.equal("collapseExpandedOnHeaderClick" in settings, false);
 });
+
+test("pinned groups are deduplicated by title and color, not title alone", () => {
+  const pinned = normalizeSettings({
+    pinnedGroups: [
+      { title: "Default", color: "red" },
+      { title: "Default", color: "blue" },
+      { title: "Default", color: "red" },
+    ],
+  }).pinnedGroups;
+  assert.deepEqual(pinned, [
+    { title: "Default", color: "red" },
+    { title: "Default", color: "blue" },
+  ]);
+});

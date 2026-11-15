@@ -20,7 +20,7 @@ import {
   planGroupOrder,
   planNewTabTarget,
 } from "./lib/layout.js";
-import { choosePinnedRestore, isPinnedTitle } from "./lib/pinned.js";
+import { choosePinnedRestore, isPinnedGroup } from "./lib/pinned.js";
 import { loadSettings, normalizeSettings, saveSettings } from "./lib/settings.js";
 
 const QUIET_MS = 1500;
@@ -44,6 +44,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const errorText = (err) => String(err?.message ?? err ?? "");
 const sortTabs = (tabs) =>
   tabs.slice().sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+const pinnedKey = (title, color) => `${title}\u0000${color}`;
 
 let ready = false;
 let bootPromise = null;
@@ -415,7 +416,9 @@ function refreshPinnedSnapshots() {
 
 async function doRefreshPinnedSnapshots() {
   const settings = currentSettings;
-  const pinnedTitles = new Set(settings.pinnedGroups.map((pinned) => pinned.title));
+  const pinnedKeys = new Set(
+    settings.pinnedGroups.map((pinned) => pinnedKey(pinned.title, pinned.color)),
+  );
   let groups = [];
   let tabs = [];
   try {
@@ -439,7 +442,7 @@ async function doRefreshPinnedSnapshots() {
   const tabsById = new Map(tabs.map((tab) => [tab.id, tab]));
   if (settings.enabled) {
     for (const group of groups) {
-      if (!pinnedTitles.has(group.title)) continue;
+      if (!pinnedKeys.has(pinnedKey(group.title, group.color))) continue;
       next.set(group.id, {
         windowId: group.windowId,
         title: group.title,
@@ -463,7 +466,12 @@ async function doRefreshPinnedSnapshots() {
     // so tabs.onRemoved / tabGroups.onRemoved can regroup them instead of
     // falling through to the blank-tab path.
     for (const [groupId, previous] of pinnedSnapshots) {
-      if (next.has(groupId) || !pinnedTitles.has(previous.title)) continue;
+      if (
+        next.has(groupId) ||
+        !pinnedKeys.has(pinnedKey(previous.title, previous.color))
+      ) {
+        continue;
+      }
       const pending = [];
       for (const [tabId, entry] of pendingPinnedTabs) {
         if (entry.expiresAt < Date.now()) continue;
@@ -519,7 +527,7 @@ function handleGroupRemoved(group) {
   recentGroupCreations.delete(group.id);
 
   if (!ready || !currentSettings.enabled) return;
-  if (!isPinnedTitle(currentSettings.pinnedGroups, group.title)) return;
+  if (!isPinnedGroup(currentSettings.pinnedGroups, group.title, group.color)) return;
   if (!isNormalGroupTitle(group.title)) return;
 
   const tabIds = Array.isArray(known?.tabIds) ? known.tabIds.slice() : [];
@@ -618,6 +626,7 @@ async function attemptPinnedRestore(snapshot, attempt) {
     return (
       group != null &&
       group.title === snapshot.title &&
+      group.color === snapshot.color &&
       group.windowId !== snapshot.windowId
     );
   });
@@ -630,7 +639,7 @@ async function attemptPinnedRestore(snapshot, attempt) {
         recentGroupCreations.delete(groupId);
         continue;
       }
-      if (record.title !== snapshot.title) continue;
+      if (record.title !== snapshot.title || record.color !== snapshot.color) continue;
       if (record.windowId === snapshot.windowId) continue;
       recentMoveWindowId = record.windowId;
       break;
@@ -1238,6 +1247,7 @@ chrome.tabGroups.onCreated.addListener((group) => {
   rememberCollapsed(group);
   recentGroupCreations.set(group.id, {
     title: group.title,
+    color: group.color,
     windowId: group.windowId,
     at: Date.now(),
   });

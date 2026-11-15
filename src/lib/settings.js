@@ -49,9 +49,12 @@ function sanitizePinnedGroups(value) {
   for (const entry of value) {
     if (result.length >= MAX_PINNED_GROUPS) break;
     const title = clampTitle(entry?.title);
-    if (!title || seen.has(title)) continue;
-    seen.add(title);
-    result.push({ title, color: normalizeColor(entry?.color) });
+    const color = normalizeColor(entry?.color);
+    if (!title) continue;
+    const key = `${title}\u0000${color}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ title, color });
   }
   return result;
 }

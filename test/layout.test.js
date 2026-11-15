@@ -14,7 +14,13 @@ import {
   planNewTabTarget,
 } from "../src/lib/layout.js";
 
-const group = (id, title) => ({ id, title, windowId: 1, collapsed: false });
+const group = (id, title, color = "grey") => ({
+  id,
+  title,
+  color,
+  windowId: 1,
+  collapsed: false,
+});
 const tab = (id, index, groupId, extra = {}) => ({
   id,
   index,
@@ -60,7 +66,7 @@ test("planGroupOrder moves every group ahead of ungrouped tabs", () => {
 });
 
 test("planGroupOrder applies configured pinned order ahead of the rest", () => {
-  const groups = [group(1, "A"), group(2, "B"), group(3, "C")];
+  const groups = [group(1, "A", "red"), group(2, "B", "blue"), group(3, "C")];
   const tabs = [tab(10, 0, 1), tab(11, 1, 2), tab(12, 2, 3)];
   assert.deepEqual(
     planGroupOrder({
@@ -96,7 +102,24 @@ test("planGroupOrder skips pinned titles that are not open", () => {
   );
 });
 
-test("planGroupOrder pins every group sharing a title together", () => {
+test("planGroupOrder only pins groups matching both title and color", () => {
+  const groups = [
+    group(1, "Default", "blue"),
+    group(2, "Default", "red"),
+    group(3, "Alpha", "grey"),
+  ];
+  const tabs = [tab(10, 0, 1), tab(11, 1, 2), tab(12, 2, 3)];
+  assert.deepEqual(
+    planGroupOrder({ tabs, groups, pinnedGroups: [{ title: "Default", color: "red" }] }),
+    [
+      { groupId: 3, index: 0 },
+      { groupId: 1, index: 0 },
+      { groupId: 2, index: 0 },
+    ],
+  );
+});
+
+test("planGroupOrder pins every group sharing a title and color together", () => {
   const groups = [group(1, "B"), group(2, "X"), group(3, "X")];
   const tabs = [tab(10, 0, 1), tab(11, 1, 2), tab(12, 2, 3)];
   assert.deepEqual(

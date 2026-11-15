@@ -1,21 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { choosePinnedRestore, isPinnedTitle } from "../src/lib/pinned.js";
+import { choosePinnedRestore, isPinnedGroup } from "../src/lib/pinned.js";
 
 const PINNED = [
   { title: "A", color: "blue" },
   { title: "B", color: "grey" },
 ];
 
-test("isPinnedTitle matches exactly and never on a missing title", () => {
-  assert.equal(isPinnedTitle(PINNED, "A"), true);
-  assert.equal(isPinnedTitle(PINNED, "B"), true);
-  assert.equal(isPinnedTitle(PINNED, "a"), false);
-  assert.equal(isPinnedTitle(PINNED, " A"), false);
-  assert.equal(isPinnedTitle(PINNED, ""), false);
-  assert.equal(isPinnedTitle(PINNED, undefined), false);
-  assert.equal(isPinnedTitle([], "A"), false);
+test("isPinnedGroup requires both exact title and color", () => {
+  assert.equal(isPinnedGroup(PINNED, "A", "blue"), true);
+  assert.equal(isPinnedGroup(PINNED, "B", "grey"), true);
+  assert.equal(isPinnedGroup(PINNED, "A", "red"), false);
+  assert.equal(isPinnedGroup(PINNED, "B", "blue"), false);
+  assert.equal(isPinnedGroup(PINNED, "a", "blue"), false);
+  assert.equal(isPinnedGroup(PINNED, " A", "blue"), false);
+  assert.equal(isPinnedGroup(PINNED, "", "blue"), false);
+  assert.equal(isPinnedGroup(PINNED, undefined, "blue"), false);
+  assert.equal(isPinnedGroup([], "A", "blue"), false);
 });
 
 test("choosePinnedRestore skips when the window is closing", () => {

@@ -74,18 +74,21 @@ function renderForm(settings) {
   els.defaultGroupColor.value = settings.defaultGroupColor;
 }
 
+const groupKey = (title, color) => `${title}\u0000${color}`;
+
 function openGroupsByTitle(groups) {
-  const byTitle = new Map();
+  const byKey = new Map();
   for (const group of groups) {
     if (!group.title) continue;
-    const entry = byTitle.get(group.title);
+    const key = groupKey(group.title, group.color);
+    const entry = byKey.get(key);
     if (entry) entry.count += 1;
-    else byTitle.set(group.title, { count: 1, color: group.color });
+    else byKey.set(key, { title: group.title, color: group.color, count: 1 });
   }
-  return byTitle;
+  return byKey;
 }
 
-function pinnedRow(entry, index, pinnedGroups, byTitle) {
+function pinnedRow(entry, index, pinnedGroups, byKey) {
   const row = document.createElement("li");
   row.className = "pin-row";
 
@@ -98,14 +101,14 @@ function pinnedRow(entry, index, pinnedGroups, byTitle) {
   title.textContent = entry.title;
   row.append(title);
 
-  const live = byTitle.get(entry.title);
+  const live = byKey.get(groupKey(entry.title, entry.color));
   const meta = document.createElement("span");
   meta.className = "pin-meta";
   if (!live) {
     meta.textContent = "未打开";
     meta.classList.add("warn");
   } else if (live.count > 1) {
-    meta.textContent = `同名组会一起钉住（${live.count} 个）`;
+    meta.textContent = `同标题同色分组会一起钉住（${live.count} 个）`;
   }
   row.append(meta);
 
@@ -157,21 +160,29 @@ async function renderPinned(settings) {
   } catch (err) {
     setStatus(String(err?.message ?? err), true);
   }
-  const byTitle = openGroupsByTitle(groups);
+  const byKey = openGroupsByTitle(groups);
   const pinnedGroups = settings.pinnedGroups;
 
   els.pinnedList.replaceChildren(
-    ...pinnedGroups.map((entry, index) => pinnedRow(entry, index, pinnedGroups, byTitle)),
+    ...pinnedGroups.map((entry, index) => pinnedRow(entry, index, pinnedGroups, byKey)),
   );
   els.emptyPinned.hidden = pinnedGroups.length > 0;
 
-  const pinnedTitles = new Set(pinnedGroups.map((entry) => entry.title));
+  const pinnedKeys = new Set(
+    pinnedGroups.map((entry) => groupKey(entry.title, entry.color)),
+  );
   const options = [];
-  for (const [title, info] of byTitle) {
-    if (pinnedTitles.has(title)) continue;
+  for (const [key, info] of byKey) {
+    if (pinnedKeys.has(key)) continue;
     const option = document.createElement("option");
-    option.value = title;
-    option.textContent = info.count > 1 ? `${title}（${info.count} 个）` : title;
+    option.value = key;
+    option.dataset.title = info.title;
+    option.dataset.color = info.color;
+    const colorLabel = COLOR_LABELS[info.color] ?? info.color;
+    option.textContent =
+      info.count > 1
+        ? `${info.title}（${colorLabel}，${info.count} 个）`
+        : `${info.title}（${colorLabel}）`;
     options.push(option);
   }
   const placeholder = document.createElement("option");
@@ -181,11 +192,11 @@ async function renderPinned(settings) {
   els.pinButton.disabled = options.length === 0;
 
   els.pinButton.onclick = () => {
-    const title = els.openGroups.value;
-    if (!title) return;
-    const info = byTitle.get(title);
-    if (!info) return;
-    const next = pinnedGroups.concat({ title, color: info.color });
+    const option = els.openGroups.selectedOptions[0];
+    const title = option?.dataset.title;
+    const color = option?.dataset.color;
+    if (!title || !color) return;
+    const next = pinnedGroups.concat({ title, color });
     void savePatch({ pinnedGroups: next });
   };
 }

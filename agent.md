@@ -20,7 +20,7 @@
 | `icons/icon.svg` + PNG | 扩展图标源文件，改图后重新导出 16/32/48/128 |
 | `src/background.js` | 事件接线、逐窗口串行归一化、启动门、固定分组保护、设置写入 |
 | `src/lib/layout.js` | `planGroupOrder`、`planCollapse`、`planNewTabTarget`、默认分组查找、NTP URL 判定 |
-| `src/lib/pinned.js` | `isPinnedTitle`、`choosePinnedRestore`（`skip` / `regroup` / `blank`） |
+| `src/lib/pinned.js` | `isPinnedGroup`（标题+颜色）、`choosePinnedRestore`（`skip` / `regroup` / `blank`） |
 | `src/lib/settings.js` | 默认值、标题/颜色/钉住列表校验、`loadSettings` / `saveSettings` |
 | `src/options.*` | 行为开关、默认分组、钉住列表增删排序、“立即整理” |
 | `src/popup.*` | 分组数、当前分组、总开关、“立即整理”、“设置” |
@@ -95,17 +95,17 @@ flowchart LR
 - `tabs.onRemoved` 先从快照同步删除 ID，再刷新；这样最后一个标签页关闭时快照为空，才能触发空白页。
 - `tabs.onUpdated` 的 `groupId` 变化：从旧快照删除；新分组是钉住分组则加入；变为 `-1` 且有 origin 才 `claimPendingPinned`。
 - `tabs.onDetached/onAttached` 不立即改快照，等 `onRemoved` 处理完跨窗口移动。
-- `tabGroups.onRemoved`：先取快照；非钉住标题/未启用/未就绪直接丢弃；否则等 500ms 让移动和窗口关闭标志稳定。
+- `tabGroups.onRemoved`：先取快照；非钉住标题+颜色/未启用/未就绪直接丢弃；否则等 500ms 让移动和窗口关闭标志稳定。
 - 恢复决策用纯函数 `choosePinnedRestore`：窗口关闭或已移动到其他窗口 → `skip`；同窗口存活的未分组标签页 → `regroup`；否则 → `blank`。不要抢其他分组里的存活标签页。
 - `restoreLocks` 按 `${windowId}:${groupId}` 防重入；`closingWindows` 5s TTL；`recentGroupCreations` 2s 内识别“移动到新窗口”。
 - 拖拽/不可编辑错误：整个恢复最多重试一次（300ms）；重试期间必须保留 pending 声明，否则归一化会把标签页扫进默认分组。所有清理放在 `finally`。
 - 空白页创建：`chrome://newtab/`，失败回退 `about:blank`；必须未激活。创建后同时标记 `ignoreCreatedTabs` 和 pending，再归组。
-- 标题是唯一身份：精确、区分大小写；同名分组全部钉住。重命名即失去钉住；无标题分组不可钉住。
+- 身份是**标题 + 颜色**：标题精确、区分大小写，颜色必须在九色枚举内且一致；同标题同色分组全部钉住。重命名或改色即失去钉住；无标题分组不可钉住。选项页、`planGroupOrder`、快照筛选、移动识别和恢复判定都必须用同一个二元组，不能只比标题。
 - 重建前要判断该分组是否原本展开：Chrome 可能在移除前先把它折叠，因此用 `pinnedSnapshots` 中最后一次刷新到的 `collapsed`（`snapshot.wasExpanded`），不要只看 `tabGroups.onRemoved` 的 `group.collapsed`。原本展开且标题不是默认组时，重建后调用 `focusDefaultGroup` 激活默认组 MRU 标签页并折叠重建组，避免其他钉住分组抢占展开位。
 
 ## 设置与 UI
 
-- 单一存储键：`chrome.storage.sync.settings`。`normalizeSettings` 合并默认值、裁剪标题到 30 字符、校验九种颜色、钉住列表去空/去重/上限 50。
+- 单一存储键：`chrome.storage.sync.settings`。`normalizeSettings` 合并默认值、裁剪标题到 30 字符、校验九种颜色、钉住列表按标题+颜色去重、上限 50。
 - 后台 `save-settings` 在写存储前先重命名各窗口的默认分组（先 remembered ID，再旧标题匹配），避免设置切换后旧标题分组被当成普通分组。
 - 选项页保存后立即 `refresh`，`chrome.storage.onChanged` 也会刷新；不要把设置写进本地副本。
 - 选项页钉住列表顺序即标签栏顺序；上/下移动、取消钉住都发送完整 `pinnedGroups` 数组。“取消钉住”不会关闭 Chrome 分组。
@@ -148,7 +148,7 @@ npm test
 4. 按“行为矩阵”逐项验证三种 `expandedGroupHeaderClick`：多个组 + 默认组、无默认组、点击默认组、唯一组；每种都在 pinned 无/非活动/活动下点击一次，确认分组与活动标签页一致；`newtab` 模式确认只多出一个组内 NTP（占位页被关闭）。
 5. 页面链接 Ctrl+点击 / `window.open` → 不抢标签页；外部程序打开（终端 `open`/命令行，注意其 opener 非空）→ 开关生效，打开后进入当前展开分组。
 6. 钉住 A 后关闭最后一个标签页 → 空白 NTP 重建；多个钉住分组（A/B）时关闭展开的 A 的最后一个标签页，重建后默认分组展开并激活其 MRU，B 保持折叠；再在有/无 pinned tab（含 pinned 活动）下各验证一次。取消分组 → 原标签页归组；移动分组到新窗口 / 关闭窗口 → 不补空白。
-7. 取消钉住后删除 → 不再重建；Chrome 中重命名 → 失去钉住。
+7. 取消钉住后删除 → 不再重建；Chrome 中重命名或改色 → 失去钉住。准备两个同标题不同颜色的分组（如红色 `Default` 与保存恢复的蓝色 `Default`）：只钉住红色时，删除/取消分组/关闭蓝色组都不应重建它，红色仍受保护。
 8. 开启“继续浏览上次打开的网页”后重启 → 分组/标题/颜色/顺序/单展开全部保持。
 9. 关闭总开关 → 激活、创建、取消分组都不被改写，固定分组保护停止；重新开启后收敛。
 

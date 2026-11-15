@@ -1,9 +1,11 @@
 // Pure pinned-group decisions. No chrome.* calls.
 
-/** Pinned identity is the exact, case-sensitive group title. */
-export function isPinnedTitle(pinnedGroups, title) {
+/** Pinned identity is the exact, case-sensitive title plus group color. */
+export function isPinnedGroup(pinnedGroups, title, color) {
   if (typeof title !== "string" || title === "") return false;
-  return (pinnedGroups ?? []).some((pinned) => pinned?.title === title);
+  return (pinnedGroups ?? []).some(
+    (pinned) => pinned?.title === title && pinned?.color === color,
+  );
 }
 
 /**

@@ -129,7 +129,7 @@ export function planGroupOrder({ tabs, groups, pinnedGroups = [] }) {
   for (const pinned of pinnedGroups ?? []) {
     for (const group of current) {
       if (taken.has(group.id)) continue;
-      if (group.title === pinned.title) {
+      if (group.title === pinned.title && group.color === pinned.color) {
         desired.push(group);
         taken.add(group.id);
       }

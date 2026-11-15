@@ -580,3 +580,30 @@ test("restoring an expanded pinned group hands focus back to the default group",
   assert.equal(findGroup(100).collapsed, false);
   assert.equal(tabs.find((entry) => entry.active)?.groupId, 100);
 });
+
+test("same-title groups with another color are not protected", async () => {
+  const red = { id: 500, windowId: 1, title: "Default", color: "red", collapsed: true };
+  const blue = { id: 600, windowId: 1, title: "Default", color: "blue", collapsed: true };
+  groups.push(red, blue);
+  tabs.push(
+    { id: 9, windowId: 1, index: 5, groupId: 500, pinned: false, active: false, lastAccessed: 10, url: "https://example.com/red" },
+    { id: 10, windowId: 1, index: 6, groupId: 600, pinned: false, active: false, lastAccessed: 11, url: "https://example.com/blue" },
+  );
+  await chrome.storage.sync.set({
+    settings: { ...settings, pinnedGroups: [{ title: "Default", color: "red" }] },
+  });
+  await sleep(350);
+
+  tabs.splice(tabs.indexOf(findTab(10)), 1);
+  groups.splice(groups.indexOf(blue), 1);
+  calls.create.length = 0;
+  chrome.tabGroups.onRemoved.fire(clone(blue));
+  await sleep(700);
+
+  assert.equal(calls.create.length, 0);
+  assert.equal(
+    groups.some((entry) => entry.title === "Default" && entry.color === "blue"),
+    false,
+  );
+  assert.ok(groups.some((entry) => entry.title === "Default" && entry.color === "red"));
+});
