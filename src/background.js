@@ -11,6 +11,7 @@
 
 import {
   TAB_GROUP_ID_NONE,
+  findCollapseReplacement,
   findDefaultGroup,
   isNewTabUrl,
   isUngroupedTab,
@@ -62,6 +63,7 @@ const burstSuppressUntil = new Map();
 
 const pendingPinnedTabs = new Map();
 const pendingCreatedTabs = new Map();
+const recentTabCreations = new Map();
 const restoreLocks = new Set();
 const recentGroupCreations = new Map();
 const collapsedStates = new Map();
@@ -859,13 +861,60 @@ async function activateTabWithRetry(tabId, attempt = 0) {
   }
 }
 
+/**
+ * Chrome opens a throwaway blank tab when the user collapses the active group
+ * and nothing outside it can take focus (no pinned tab, no other expanded
+ * group). Close that tab; normalization then picks the next group to expand.
+ */
+async function suppressCollapseReplacement(group) {
+  let tabs = [];
+  let groups = [];
+  try {
+    [tabs, groups] = await Promise.all([
+      chrome.tabs.query({ windowId: group.windowId }),
+      chrome.tabGroups.query({ windowId: group.windowId }),
+    ]);
+  } catch {
+    return;
+  }
+  const live = groups.find((entry) => entry.id === group.id);
+  if (!live || !live.collapsed) return;
+  const replacementId = findCollapseReplacement({
+    tabs,
+    creations: recentTabCreations,
+    groupId: group.id,
+    now: Date.now(),
+  });
+  if (replacementId == null) return;
+  try {
+    await chrome.tabs.remove(replacementId);
+  } catch {
+    return;
+  }
+  recentTabCreations.delete(replacementId);
+  schedule(group.windowId);
+}
+
 async function handleGroupUpdated(group) {
   refreshPinnedSnapshots();
   schedule(group.windowId);
 
-  if (!ready || !currentSettings.enabled || !currentSettings.singleExpanded) return;
   const previous = collapsedStates.get(group.id);
   rememberCollapsed(group);
+  if (!ready || !currentSettings.enabled) return;
+
+  if (
+    previous === false &&
+    group.collapsed === true &&
+    currentSettings.suppressCollapseNewTab &&
+    Date.now() >= warmupUntil
+  ) {
+    void suppressCollapseReplacement(group).catch((err) =>
+      console.warn("[gtm] collapse cleanup failed", errorText(err)),
+    );
+  }
+
+  if (!currentSettings.singleExpanded) return;
   if (previous !== true || group.collapsed !== false) return;
   if (Date.now() < warmupUntil) return;
 
@@ -908,6 +957,19 @@ async function handleGroupUpdated(group) {
 // ------------------------------------------------------------- event wiring
 
 chrome.tabs.onCreated.addListener((tab) => {
+  if (tab?.id != null) {
+    const url = tab.pendingUrl || tab.url || "";
+    const now = Date.now();
+    recentTabCreations.set(tab.id, {
+      createdAt: now,
+      windowId: tab.windowId,
+      openerTabId: tab.openerTabId ?? null,
+      blank: url === "" || isNewTabUrl(url),
+    });
+    for (const [createdId, entry] of recentTabCreations) {
+      if (now - entry.createdAt > 5000) recentTabCreations.delete(createdId);
+    }
+  }
   void handleCreated(tab)
     .catch((err) => console.warn("[gtm] onCreated failed", errorText(err)))
     .finally(() => {
@@ -921,10 +983,22 @@ chrome.tabs.onActivated.addListener((info) => {
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (!Object.hasOwn(changeInfo, "groupId")) return;
-  const check = pendingCreatedChecks.get(tabId);
-  if (check) check.cancelled = true;
-  syncSnapshotMembership(tabId, changeInfo.groupId);
+  const groupChanged = Object.hasOwn(changeInfo, "groupId");
+  const pinnedChanged = Object.hasOwn(changeInfo, "pinned");
+  if (!groupChanged && !pinnedChanged) return;
+
+  if (groupChanged) {
+    const check = pendingCreatedChecks.get(tabId);
+    if (check) check.cancelled = true;
+    syncSnapshotMembership(tabId, changeInfo.groupId);
+  }
+  if (pinnedChanged) {
+    // Pinning always leaves a group, and unpinning yields an ungrouped tab:
+    // drop transient protection claims so normalization assigns it afresh
+    // (the default-group pass picks it up).
+    releasePendingPinned(tabId);
+    removeTabFromSnapshots(tabId);
+  }
   refreshPinnedSnapshots();
   schedule(tab?.windowId);
 });
@@ -939,6 +1013,7 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   }
   releasePendingPinned(tabId);
   releasePendingCreated(tabId);
+  recentTabCreations.delete(tabId);
   pendingCreatedChecks.delete(tabId);
   ignoreCreatedTabs.delete(tabId);
   refreshPinnedSnapshots();
@@ -1018,6 +1093,13 @@ chrome.windows.onRemoved.addListener((windowId) => {
     if (snapshot.windowId === windowId) pinnedSnapshots.delete(groupId);
   }
 });
+
+function removeTabFromSnapshots(tabId) {
+  for (const snapshot of pinnedSnapshots.values()) {
+    const at = snapshot.tabIds.indexOf(tabId);
+    if (at !== -1) snapshot.tabIds.splice(at, 1);
+  }
+}
 
 function syncSnapshotMembership(tabId, newGroupId) {
   let origin = null;

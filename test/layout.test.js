@@ -5,6 +5,7 @@ import {
   TAB_GROUP_ID_NONE,
   isNewTabUrl,
   isUngroupedTab,
+  findCollapseReplacement,
   findDefaultGroup,
   mostRecentlyUsedGroupId,
   planCollapse,
@@ -235,6 +236,72 @@ test("isNewTabUrl recognizes browser new-tab pages only", () => {
   for (const url of ["https://example.com", "chrome://settings/", "", "about:blankx", null]) {
     assert.equal(isNewTabUrl(url), false, String(url));
   }
+});
+
+
+test("findCollapseReplacement identifies Chrome's throwaway tab", () => {
+  const tabs = [
+    tab(10, 0, 7, { active: false }),
+    tab(11, 1, 7, { active: true }),
+    tab(12, 2, TAB_GROUP_ID_NONE, { active: true }),
+  ];
+  const creations = new Map([
+    [12, { createdAt: 995, windowId: 1, openerTabId: 11, blank: true }],
+  ]);
+  assert.equal(
+    findCollapseReplacement({ tabs, creations, groupId: 7, now: 1000, maxAgeMs: 300 }),
+    12,
+  );
+});
+
+test("findCollapseReplacement rejects old, non-blank, pinned and inactive tabs", () => {
+  const baseTabs = [tab(10, 0, 7, { active: false }), tab(11, 1, 7, { active: true })];
+  const check = (extraTab, creation) => {
+    const tabs = [...baseTabs, extraTab];
+    const creations = new Map([[extraTab.id, creation]]);
+    return findCollapseReplacement({ tabs, creations, groupId: 7, now: 1000, maxAgeMs: 300 });
+  };
+  const good = { createdAt: 990, windowId: 1, openerTabId: 11, blank: true };
+  assert.equal(
+    check(tab(12, 2, TAB_GROUP_ID_NONE, { active: true }), { ...good, createdAt: 600 }),
+    null,
+    "too old",
+  );
+  assert.equal(
+    check(tab(12, 2, TAB_GROUP_ID_NONE, { active: true }), { ...good, blank: false }),
+    null,
+    "not a blank tab",
+  );
+  assert.equal(
+    check(tab(12, 2, TAB_GROUP_ID_NONE, { active: true, pinned: true }), good),
+    null,
+    "pinned",
+  );
+  assert.equal(
+    check(tab(12, 2, TAB_GROUP_ID_NONE, { active: false }), good),
+    null,
+    "not active",
+  );
+  assert.equal(
+    check(tab(12, 2, 7, { active: true }), good),
+    12,
+    "the fast path may already have grouped it into the collapsing group",
+  );
+  assert.equal(
+    check(tab(12, 2, TAB_GROUP_ID_NONE, { active: true }), { ...good, openerTabId: 10 }),
+    12,
+    "opener may be any tab of the group",
+  );
+  assert.equal(
+    check(tab(12, 2, TAB_GROUP_ID_NONE, { active: true }), { ...good, openerTabId: 99 }),
+    null,
+    "opener outside the group",
+  );
+  assert.equal(
+    check(tab(12, 2, TAB_GROUP_ID_NONE, { active: true }), { ...good, openerTabId: null }),
+    null,
+    "no opener",
+  );
 });
 
 test("planNewTabTarget prefers the active group", () => {

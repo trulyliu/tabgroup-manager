@@ -148,6 +148,41 @@ export function planGroupOrder({ tabs, groups, pinnedGroups = [] }) {
     .map((group) => ({ groupId: group.id, index: pinnedCount }));
 }
 
+/**
+ * Chrome creates a throwaway blank tab when its active group is collapsed and
+ * no expanded/pinned tab can take focus. Identify that tab so it can be closed
+ * again: it is brand new, blank, active, and was opened from a tab inside the
+ * collapsing group. Its group may already have been rewritten by the new-tab
+ * fast path, so group membership is deliberately not part of the match.
+ */
+export function findCollapseReplacement({
+  tabs,
+  creations,
+  groupId,
+  now = Date.now(),
+  maxAgeMs = 300,
+}) {
+  const groupTabIds = new Set(
+    (tabs ?? []).filter((tab) => tab.groupId === groupId).map((tab) => tab.id),
+  );
+  let best = null;
+  let bestAt = -Infinity;
+  for (const tab of tabs ?? []) {
+    const created = creations?.get?.(tab.id);
+    if (!created) continue;
+    if (now - created.createdAt > maxAgeMs || created.createdAt > now) continue;
+    if (!created.blank) continue;
+    if (tab.pinned || !tab.active) continue;
+    if (created.windowId != null && created.windowId !== tab.windowId) continue;
+    if (created.openerTabId == null || !groupTabIds.has(created.openerTabId)) continue;
+    if (created.createdAt > bestAt) {
+      bestAt = created.createdAt;
+      best = tab;
+    }
+  }
+  return best?.id ?? null;
+}
+
 /** Where a newly created tab should go, or null to use the default group. */
 export function planNewTabTarget({
   tabs,

@@ -23,7 +23,7 @@
 | `src/lib/settings.js` | 默认值、标题/颜色/钉住列表校验、`loadSettings` / `saveSettings` |
 | `src/options.*` | 行为开关、默认分组、钉住列表增删排序、“立即整理” |
 | `src/popup.*` | 分组数、当前分组、总开关、“立即整理”、“设置” |
-| `test/*.test.js` | 纯逻辑回归测试，`node:test` + `assert/strict` |
+| `test/*.test.js` | 纯逻辑回归测试 + `background.test.js`（fake chrome，覆盖真实事件接线） |
 
 ## 必须维持的不变量
 
@@ -53,6 +53,8 @@ flowchart LR
 - `chrome.tabs.group` 绝对不能收到固定标签页：源码文档明确会把它取消固定。`ensureDefaultGroup` 已过滤。
 - Chrome 会自动展开包含活动标签页的分组，不要试图折叠它。
 - `chrome.tabGroups.query` 返回顺序不代表标签栏顺序；判断顺序必须用各分组标签页的最小 `index`（这也是测试陷阱）。
+- `tabs.onUpdated` 必须同时处理 `groupId` 和 `pinned`：固定标签页不属于分组，取消固定后 groupId 仍是 -1，只有 `pinned` 变化事件可用；不调度归一化就会一直留在未分组状态。
+- Chrome 在“收起活动分组且无其他可切换标签页（无固定标签页、无其他展开分组）”时会新建一个空白页（`BrowserTabStripController::ToggleTabGroupCollapsedState`）。扩展只能事后识别并关闭；`suppressCollapseNewTab` 默认开启。识别条件见 `findCollapseReplacement`：300ms 内创建、空/NTP URL、活动、未固定、opener 在分组内（不检查当前分组，快速路径可能已把它归组）。
 - 内存态（`lastActiveGroupByWindow`、`defaultGroupByWindow`、`collapsedStates`）在 worker 重启后为空；归一化必须能靠标题、`lastAccessed` 和实时查询恢复，不能依赖这些 Map 一定存在。
 - 固定分组快照在启动/worker 重启后从实时分组重建；不要信任持久化里可能被复用的 group ID。
 
@@ -116,12 +118,13 @@ npm test
 
 1. 固定标签页 + A/B 分组 + 未分组标签页 → 默认分组建立、分组在前、只展开一个。
 2. 点击折叠分组标题 → 切到该分组最近标签页；关闭该开关后 → 分组重新折叠。
-3. A 分组活动时 Ctrl+T → 新标签页在 A 末尾；固定标签页活动且 `keepLastWhenPinned` 开关两种状态。
-4. 页面链接 Ctrl+点击 / `window.open` → 不抢标签页；外部程序打开 → 开关生效。
-5. 钉住 A 后关闭最后一个标签页 → 空白 NTP 重建；取消分组 → 原标签页归组；移动分组到新窗口 / 关闭窗口 → 不补空白。
-6. 取消钉住后删除 → 不再重建；Chrome 中重命名 → 失去钉住。
-7. 开启“继续浏览上次打开的网页”后重启 → 分组/标题/颜色/顺序/单展开全部保持。
-8. 关闭总开关 → 激活、创建、取消分组都不被改写，固定分组保护停止；重新开启后收敛。
+3. A 分组活动时 Ctrl+T → 新标签页在 A 末尾；固定标签页活动且 `keepLastWhenPinned` 开关两种状态。固定任意标签页后再取消固定 → 该标签页进入默认分组；有/无其他固定标签页各验证一次。
+4. 无固定标签页、只有一个展开分组时，点击该展开分组的标题 → 默认设置下不新增标签页，分组收起且焦点切换到其他分组；关闭 `suppressCollapseNewTab` 后恢复 Chrome 原生的新建空白页行为。
+5. 页面链接 Ctrl+点击 / `window.open` → 不抢标签页；外部程序打开 → 开关生效。
+6. 钉住 A 后关闭最后一个标签页 → 空白 NTP 重建；取消分组 → 原标签页归组；移动分组到新窗口 / 关闭窗口 → 不补空白。
+7. 取消钉住后删除 → 不再重建；Chrome 中重命名 → 失去钉住。
+8. 开启“继续浏览上次打开的网页”后重启 → 分组/标题/颜色/顺序/单展开全部保持。
+9. 关闭总开关 → 激活、创建、取消分组都不被改写，固定分组保护停止；重新开启后收敛。
 
 检查扩展页 `chrome://extensions` 无 runtime error；不要把 URL 加进日志来“调试分类”。
 

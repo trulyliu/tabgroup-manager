@@ -20,6 +20,7 @@ const CHECKBOX_KEYS = [
   "keepLastWhenPinned",
   "externalNewTabInActiveGroup",
   "expandHeaderClick",
+  "suppressCollapseNewTab",
 ];
 
 const els = {
@@ -30,6 +31,7 @@ const els = {
   keepLastWhenPinned: document.getElementById("keepLastWhenPinned"),
   externalNewTabInActiveGroup: document.getElementById("externalNewTabInActiveGroup"),
   expandHeaderClick: document.getElementById("expandHeaderClick"),
+  suppressCollapseNewTab: document.getElementById("suppressCollapseNewTab"),
   defaultGroupTitle: document.getElementById("defaultGroupTitle"),
   defaultGroupColor: document.getElementById("defaultGroupColor"),
   pinnedList: document.getElementById("pinnedList"),
