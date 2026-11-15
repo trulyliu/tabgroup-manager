@@ -303,3 +303,72 @@ test("closing the throwaway tab Chrome creates on group collapse", async () => {
   assert.deepEqual(calls.remove, [6]);
   assert.equal(tabs.some((entry) => entry.id === 6), false);
 });
+
+test("collapsing the expanded group while a pinned tab is active expands another group", async () => {
+  const alpha = findGroup(300);
+  const defaultGroup = findGroup(100);
+  defaultGroup.collapsed = true;
+  alpha.collapsed = false;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  await sleep(40);
+
+  // Use Alpha, then activate a pinned tab: keepLastWhenPinned keeps Alpha open.
+  findTab(2).pinned = true;
+  findTab(2).groupId = -1;
+  for (const entry of tabs) entry.active = false;
+  findTab(4).active = true;
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 4 });
+  await sleep(250);
+  for (const entry of tabs) entry.active = false;
+  findTab(2).active = true;
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 2 });
+  await sleep(250);
+  assert.equal(findGroup(300).collapsed, false);
+
+  // Clicking Alpha's header must collapse it, not re-expand it because the
+  // active tab is pinned. Another group takes the expanded slot.
+  alpha.collapsed = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  await sleep(300);
+
+  assert.equal(findGroup(300).collapsed, true);
+  assert.equal(findGroup(100).collapsed, false);
+  assert.equal(findTab(2).active, true);
+});
+
+test("an external tab with an opener still honors the active-group setting", async () => {
+  const alpha = findGroup(300);
+  alpha.collapsed = false;
+  for (const entry of tabs) entry.active = false;
+  findTab(4).active = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 4 });
+  await sleep(250);
+  assert.equal(findGroup(300).collapsed, false);
+
+  // Chrome 157 gives externally launched tabs the previously active tab as
+  // opener; that must not make them look like link tabs.
+  const external = {
+    id: 7,
+    windowId: 1,
+    index: tabs.length,
+    groupId: -1,
+    pinned: false,
+    active: true,
+    lastAccessed: Date.now(),
+    openerTabId: 4,
+    url: "https://www.baidu.com/",
+    pendingUrl: "https://www.baidu.com/",
+  };
+  for (const entry of tabs) entry.active = false;
+  tabs.push(external);
+  calls.group.length = 0;
+
+  chrome.tabs.onCreated.fire(clone(external));
+  await sleep(300);
+
+  const call = calls.group.find((entry) => entry.tabIds.includes(7));
+  assert.ok(call, "external tab should be grouped");
+  assert.equal(call.groupId, 300);
+  assert.equal(findTab(7).groupId, 300);
+});

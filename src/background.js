@@ -64,6 +64,7 @@ const burstSuppressUntil = new Map();
 const pendingPinnedTabs = new Map();
 const pendingCreatedTabs = new Map();
 const recentTabCreations = new Map();
+const avoidGroupByWindow = new Map();
 const restoreLocks = new Set();
 const recentGroupCreations = new Map();
 const collapsedStates = new Map();
@@ -352,12 +353,12 @@ async function applySingleExpanded(windowId, settings) {
   ]);
   const tabs = sortTabs(rawTabs);
   const activeTab = tabs.find((tab) => tab.active) ?? null;
-  if (
-    activeTab &&
-    activeTab.groupId !== TAB_GROUP_ID_NONE &&
-    groups.some((group) => group.id === activeTab.groupId)
-  ) {
+  const groupIds = new Set(groups.map((group) => group.id));
+  let avoidGroupId = avoidGroupByWindow.get(windowId) ?? null;
+  if (activeTab && groupIds.has(activeTab.groupId)) {
     lastActiveGroupByWindow.set(windowId, activeTab.groupId);
+    avoidGroupByWindow.delete(windowId);
+    avoidGroupId = null;
   }
 
   const plan = planCollapse({
@@ -366,11 +367,16 @@ async function applySingleExpanded(windowId, settings) {
     activeTab,
     rememberedGroupId: lastActiveGroupByWindow.get(windowId) ?? null,
     keepLastWhenPinned: settings.keepLastWhenPinned,
+    avoidGroupId,
   });
   const byId = new Map(groups.map((group) => [group.id, group]));
   let retry = false;
 
   const expandTarget = plan.find((entry) => entry.collapsed === false);
+  if (activeTab && activeTab.groupId === TAB_GROUP_ID_NONE) {
+    if (expandTarget) lastActiveGroupByWindow.set(windowId, expandTarget.groupId);
+    else lastActiveGroupByWindow.delete(windowId);
+  }
   if (expandTarget) {
     headerActivationUntil.delete(expandTarget.groupId);
     const group = byId.get(expandTarget.groupId);
@@ -515,6 +521,9 @@ function handleGroupRemoved(group) {
   collapsedStates.delete(group.id);
   headerActivationUntil.delete(group.id);
   recentGroupCreations.delete(group.id);
+  if (avoidGroupByWindow.get(group.windowId) === group.id) {
+    avoidGroupByWindow.delete(group.windowId);
+  }
 
   if (!ready || !currentSettings.enabled) return;
   if (!isPinnedTitle(currentSettings.pinnedGroups, group.title)) return;
@@ -768,7 +777,10 @@ async function classifyNewTab(tab) {
 
   const blank = url === "" || isNewTabUrl(url);
   if (!blank) {
-    if (fresh.openerTabId != null) return; // Chrome already put link tabs in their opener's group.
+    // Chrome groups link tabs and "new tab in group" before this point. An
+    // externally launched tab can still carry an openerTabId (Chrome 157 sets
+    // it to the previously active tab), so opener presence must not override
+    // the external-tab setting.
     if (!currentSettings.externalNewTabInActiveGroup) return;
   }
 
@@ -784,6 +796,7 @@ async function classifyNewTab(tab) {
     activeTab,
     rememberedGroupId: lastActiveGroupByWindow.get(windowId) ?? null,
     keepLastWhenPinned: currentSettings.keepLastWhenPinned,
+    avoidGroupId: avoidGroupByWindow.get(windowId) ?? null,
   });
 
   if (target != null) {
@@ -903,15 +916,21 @@ async function handleGroupUpdated(group) {
   rememberCollapsed(group);
   if (!ready || !currentSettings.enabled) return;
 
-  if (
-    previous === false &&
-    group.collapsed === true &&
-    currentSettings.suppressCollapseNewTab &&
-    Date.now() >= warmupUntil
-  ) {
-    void suppressCollapseReplacement(group).catch((err) =>
-      console.warn("[gtm] collapse cleanup failed", errorText(err)),
-    );
+  if (previous === false && group.collapsed === true && Date.now() >= warmupUntil) {
+    // The user explicitly collapsed this group. Do not immediately re-expand
+    // it just because the active tab is pinned: fall back to another group.
+    avoidGroupByWindow.set(group.windowId, group.id);
+    if (lastActiveGroupByWindow.get(group.windowId) === group.id) {
+      lastActiveGroupByWindow.delete(group.windowId);
+    }
+    if (currentSettings.suppressCollapseNewTab) {
+      void suppressCollapseReplacement(group).catch((err) =>
+        console.warn("[gtm] collapse cleanup failed", errorText(err)),
+      );
+    }
+  }
+  if (group.collapsed === false && avoidGroupByWindow.get(group.windowId) === group.id) {
+    avoidGroupByWindow.delete(group.windowId);
   }
 
   if (!currentSettings.singleExpanded) return;
@@ -1086,6 +1105,7 @@ chrome.windows.onRemoved.addListener((windowId) => {
   closingWindows.delete(windowId);
   recentCreations.delete(windowId);
   burstSuppressUntil.delete(windowId);
+  avoidGroupByWindow.delete(windowId);
   clearTimeout(scheduleTimers.get(windowId));
   scheduleTimers.delete(windowId);
   windowChains.delete(windowId);

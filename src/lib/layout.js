@@ -34,13 +34,14 @@ export function findDefaultGroup(groups, { title, rememberedId } = {}) {
   return list.find((group) => group.title === title) ?? null;
 }
 
-/** Group with the freshest tab; survives service-worker restarts. */
-export function mostRecentlyUsedGroupId(tabs, groups) {
+/** Group with the freshest tab; optionally ignore one group. */
+export function mostRecentlyUsedGroupId(tabs, groups, excludeGroupId = null) {
   const known = new Set((groups ?? []).map((group) => group.id));
   let bestId = null;
   let bestAt = -Infinity;
   for (const tab of tabs ?? []) {
     if (!known.has(tab.groupId)) continue;
+    if (excludeGroupId != null && tab.groupId === excludeGroupId) continue;
     const at = Number.isFinite(tab.lastAccessed) ? tab.lastAccessed : 0;
     if (at > bestAt) {
       bestAt = at;
@@ -50,11 +51,23 @@ export function mostRecentlyUsedGroupId(tabs, groups) {
   return bestId;
 }
 
-function fallbackGroupId({ tabs, groups, rememberedGroupId, keepLastWhenPinned }) {
+function fallbackGroupId({
+  tabs,
+  groups,
+  rememberedGroupId,
+  keepLastWhenPinned,
+  avoidGroupId,
+}) {
   if (!keepLastWhenPinned) return null;
   const known = new Set((groups ?? []).map((group) => group.id));
-  if (rememberedGroupId != null && known.has(rememberedGroupId)) return rememberedGroupId;
-  return mostRecentlyUsedGroupId(tabs, groups);
+  if (
+    rememberedGroupId != null &&
+    rememberedGroupId !== avoidGroupId &&
+    known.has(rememberedGroupId)
+  ) {
+    return rememberedGroupId;
+  }
+  return mostRecentlyUsedGroupId(tabs, groups, avoidGroupId);
 }
 
 /**
@@ -67,6 +80,7 @@ export function planCollapse({
   activeTab,
   rememberedGroupId = null,
   keepLastWhenPinned = true,
+  avoidGroupId = null,
 }) {
   const list = groups ?? [];
   const known = new Set(list.map((group) => group.id));
@@ -74,7 +88,13 @@ export function planCollapse({
   if (activeTab && known.has(activeTab.groupId)) {
     target = activeTab.groupId;
   } else {
-    target = fallbackGroupId({ tabs, groups: list, rememberedGroupId, keepLastWhenPinned });
+    target = fallbackGroupId({
+      tabs,
+      groups: list,
+      rememberedGroupId,
+      keepLastWhenPinned,
+      avoidGroupId,
+    });
   }
   return list.map((group) => ({ groupId: group.id, collapsed: group.id !== target }));
 }
@@ -190,8 +210,15 @@ export function planNewTabTarget({
   activeTab,
   rememberedGroupId = null,
   keepLastWhenPinned = true,
+  avoidGroupId = null,
 }) {
   const known = new Set((groups ?? []).map((group) => group.id));
   if (activeTab && known.has(activeTab.groupId)) return activeTab.groupId;
-  return fallbackGroupId({ tabs, groups, rememberedGroupId, keepLastWhenPinned });
+  return fallbackGroupId({
+    tabs,
+    groups,
+    rememberedGroupId,
+    keepLastWhenPinned,
+    avoidGroupId,
+  });
 }

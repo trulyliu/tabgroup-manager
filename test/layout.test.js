@@ -129,6 +129,72 @@ test("mostRecentlyUsedGroupId uses the freshest grouped tab", () => {
   assert.equal(mostRecentlyUsedGroupId([tab(10, 0, -1)], groups), null);
 });
 
+
+test("planCollapse avoids a group the user explicitly collapsed", () => {
+  const groups = [group(1, "A"), group(2, "B")];
+  const tabs = [
+    tab(10, 0, -1, { pinned: true, active: true }),
+    tab(11, 1, 1, { lastAccessed: 500 }),
+    tab(12, 2, 2, { lastAccessed: 400 }),
+  ];
+  assert.deepEqual(
+    planCollapse({
+      tabs,
+      groups,
+      activeTab: tabs[0],
+      rememberedGroupId: 1,
+      keepLastWhenPinned: true,
+      avoidGroupId: 1,
+    }),
+    [
+      { groupId: 1, collapsed: true },
+      { groupId: 2, collapsed: false },
+    ],
+  );
+  assert.deepEqual(
+    planCollapse({
+      tabs,
+      groups: [group(1, "A")],
+      activeTab: tabs[0],
+      rememberedGroupId: 1,
+      keepLastWhenPinned: true,
+      avoidGroupId: 1,
+    }),
+    [{ groupId: 1, collapsed: true }],
+  );
+});
+
+test("planNewTabTarget avoids a group the user explicitly collapsed", () => {
+  const groups = [group(1, "A"), group(2, "B")];
+  const tabs = [
+    tab(10, 0, -1, { pinned: true, active: true }),
+    tab(11, 1, 1, { lastAccessed: 500 }),
+    tab(12, 2, 2, { lastAccessed: 400 }),
+  ];
+  assert.equal(
+    planNewTabTarget({
+      tabs,
+      groups,
+      activeTab: tabs[0],
+      rememberedGroupId: 1,
+      keepLastWhenPinned: true,
+      avoidGroupId: 1,
+    }),
+    2,
+  );
+  assert.equal(
+    planNewTabTarget({
+      tabs,
+      groups: [group(1, "A")],
+      activeTab: tabs[0],
+      rememberedGroupId: 1,
+      keepLastWhenPinned: true,
+      avoidGroupId: 1,
+    }),
+    null,
+  );
+});
+
 test("planCollapse expands only the active tab's group", () => {
   const groups = [group(1, "A"), group(2, "B"), group(3, "其他")];
   const tabs = [tab(10, 0, 1), tab(11, 1, 2), tab(12, 2, 3)];
