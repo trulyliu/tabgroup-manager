@@ -1,5 +1,7 @@
 # 标签组管理器（Tab Group Manager）
 
+<img src="icons/icon128.png" alt="扩展图标" width="96" align="right" />
+
 Chrome MV3 扩展，把标签栏整理成“分组优先、只展开一个分组”的工作区：
 
 - 分组标签页排在未分组标签页之前；钉住的分组按自定义顺序排在最前。
@@ -33,9 +35,12 @@ Chrome MV3 扩展，把标签栏整理成“分组优先、只展开一个分组
 
 激活某个分组的标签页时，该分组展开，其他分组折叠。点击一个折叠分组的标题时（`expandHeaderClick` 开启），扩展会激活该分组中最近使用的标签页，从而展开它并折叠其他分组。
 
-点击一个**已经展开**的分组标题会收起它，无论当前有没有固定标签页：扩展会把另一个分组（上次使用或最近使用的其他分组，通常就是默认分组）作为展开目标，不会把刚收起的分组重新展开，因此两种情况下表现一致。若已经没有任何其他分组，则保持所有分组折叠。
+点击一个**已经展开**的分组标题时，由 `collapseExpandedOnHeaderClick` 决定行为，且不受固定标签页影响：
 
-如果此时没有固定标签页、也没有其他已展开的分组可供 Chrome 切换，Chrome 会先新建一个空白标签页放在分组外，以避免活动标签页留在被折叠的分组里。`suppressCollapseNewTab`（默认开启）会识别并立即关闭这个空白页，然后由整理逻辑选择下一个分组。这依赖新标签页的创建时间与 opener 归属，Chrome 可能让它短暂闪现。
+- 开启（默认）：收起该分组，并展开另一个分组（上次使用或最近使用的其他分组，通常就是默认分组）。若没有其他分组，则所有分组保持折叠。
+- 关闭：保持该分组展开，并把焦点切回该分组最近使用的标签页，点击标题不会产生可见变化。
+
+收起模式下，如果此时没有固定标签页、也没有其他已展开的分组可供 Chrome 切换，Chrome 会先新建一个空白标签页放在分组外，以避免活动标签页留在被折叠的分组里。`suppressCollapseNewTab`（默认开启）会识别并立即关闭这个空白页，然后由整理逻辑选择下一个分组；保持展开模式同样会关闭这个占位页。这依赖新标签页的创建时间与 opener 归属，Chrome 可能让它短暂闪现。
 
 普通地激活一个固定标签页（不是点击分组标题）时：
 
@@ -92,6 +97,7 @@ Chrome 没有禁止删除分组的 API，也没有 `tabGroups.close`。保护方
 | `externalNewTabInActiveGroup` | `true` | 外部程序打开的新标签页进入当前展开的分组 |
 | `expandHeaderClick` | `true` | 点击折叠分组标题时切换到该分组最近的标签页 |
 | `suppressCollapseNewTab` | `true` | 收起当前分组时不保留 Chrome 为切换焦点而新建的空白标签页 |
+| `collapseExpandedOnHeaderClick` | `true` | 点击已展开的分组标题时收起并切换；关闭则保持该分组展开 |
 | `defaultGroupTitle` | `其他` | 默认分组标题，最长 30 字符 |
 | `defaultGroupColor` | `grey` | 默认分组颜色，九种 Chrome 颜色之一 |
 | `pinnedGroups` | `[]` | 有序的 `{title, color}` 列表；顺序即标签栏顺序 |
@@ -131,6 +137,7 @@ npm test
 
 ```
 manifest.json          MV3 清单（tabs / tabGroups / storage）
+icons/                 扩展图标（SVG 源文件 + 16/32/48/128 PNG）
 src/background.js      服务 worker：事件接线、窗口归一化、固定分组保护
 src/lib/layout.js      纯函数：排序、折叠、新标签页目标
 src/lib/pinned.js      纯函数：钉住标题匹配与恢复方式

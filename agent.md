@@ -16,7 +16,8 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `manifest.json` | 权限、service worker module、选项页、弹窗 |
+| `manifest.json` | 权限、service worker module、选项页、弹窗、图标 |
+| `icons/icon.svg` + PNG | 扩展图标源文件，改图后重新导出 16/32/48/128 |
 | `src/background.js` | 事件接线、逐窗口串行归一化、启动门、固定分组保护、设置写入 |
 | `src/lib/layout.js` | `planGroupOrder`、`planCollapse`、`planNewTabTarget`、默认分组查找、NTP URL 判定 |
 | `src/lib/pinned.js` | `isPinnedTitle`、`choosePinnedRestore`（`skip` / `regroup` / `blank`） |
@@ -53,7 +54,7 @@ flowchart LR
 - `chrome.tabs.group` 绝对不能收到固定标签页：源码文档明确会把它取消固定。`ensureDefaultGroup` 已过滤。
 - Chrome 会自动展开包含活动标签页的分组，不要试图折叠它。
 - `chrome.tabGroups.query` 返回顺序不代表标签栏顺序；判断顺序必须用各分组标签页的最小 `index`（这也是测试陷阱）。
-- 用户点击已展开分组的标题时，Chrome 可能先激活固定标签页再折叠分组；`keepLastWhenPinned` 的普通逻辑会把分组重新展开。`avoidGroupByWindow` 记录这次显式折叠，归一化时排除该分组并改用默认/其他分组，保证有无固定标签页行为一致。
+- 用户点击已展开分组的标题时，Chrome 可能先激活固定标签页再折叠分组；`keepLastWhenPinned` 的普通逻辑会把分组重新展开。`avoidGroupByWindow` 记录这次显式折叠，归一化时排除该分组并改用默认/其他分组，保证有无固定标签页行为一致。`collapseExpandedOnHeaderClick` 关闭时不写 avoid，而是由 `keepGroupExpandedAfterCollapse` 关闭占位页、重新展开分组并激活其最近标签页。
 - 外部程序新标签页在 Chrome 157 带有 `openerTabId`（指向当时活动页），不能按链接标签页跳过；仍由 `externalNewTabInActiveGroup` 决定。
 - `tabs.onUpdated` 必须同时处理 `groupId` 和 `pinned`：固定标签页不属于分组，取消固定后 groupId 仍是 -1，只有 `pinned` 变化事件可用；不调度归一化就会一直留在未分组状态。
 - Chrome 在“收起活动分组且无其他可切换标签页（无固定标签页、无其他展开分组）”时会新建一个空白页（`BrowserTabStripController::ToggleTabGroupCollapsedState`）。扩展只能事后识别并关闭；`suppressCollapseNewTab` 默认开启。识别条件见 `findCollapseReplacement`：300ms 内创建、空/NTP URL、活动、未固定、opener 在分组内（不检查当前分组，快速路径可能已把它归组）。
@@ -121,7 +122,7 @@ npm test
 1. 固定标签页 + A/B 分组 + 未分组标签页 → 默认分组建立、分组在前、只展开一个。
 2. 点击折叠分组标题 → 切到该分组最近标签页；关闭该开关后 → 分组重新折叠。
 3. A 分组活动时 Ctrl+T → 新标签页在 A 末尾；固定标签页活动且 `keepLastWhenPinned` 开关两种状态。固定任意标签页后再取消固定 → 该标签页进入默认分组；有/无其他固定标签页各验证一次。
-4. 点击一个已展开的非默认分组标题：有/无固定标签页两种情况下都应收起该分组并展开另一个分组（上次/最近使用的其他分组），且不新增标签页；关闭 `suppressCollapseNewTab` 后恢复 Chrome 原生“无固定标签页时新建空白页”的行为。
+4. 点击一个已展开的非默认分组标题：`collapseExpandedOnHeaderClick` 开启时，有/无固定标签页都收起该分组并展开另一个分组（上次/最近使用的其他分组），不新增标签页；关闭时，两种情况下该分组都保持展开且焦点回到它的最近标签页。再分别关闭 `suppressCollapseNewTab` 验证 Chrome 原生占位页行为。
 5. 页面链接 Ctrl+点击 / `window.open` → 不抢标签页；外部程序打开（终端 `open`/命令行，注意其 opener 非空）→ 开关生效，打开后进入当前展开分组。
 6. 钉住 A 后关闭最后一个标签页 → 空白 NTP 重建；取消分组 → 原标签页归组；移动分组到新窗口 / 关闭窗口 → 不补空白。
 7. 取消钉住后删除 → 不再重建；Chrome 中重命名 → 失去钉住。

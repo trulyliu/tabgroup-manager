@@ -21,6 +21,7 @@ const CHECKBOX_KEYS = [
   "externalNewTabInActiveGroup",
   "expandHeaderClick",
   "suppressCollapseNewTab",
+  "collapseExpandedOnHeaderClick",
 ];
 
 const els = {
@@ -32,6 +33,9 @@ const els = {
   externalNewTabInActiveGroup: document.getElementById("externalNewTabInActiveGroup"),
   expandHeaderClick: document.getElementById("expandHeaderClick"),
   suppressCollapseNewTab: document.getElementById("suppressCollapseNewTab"),
+  collapseExpandedOnHeaderClick: document.getElementById(
+    "collapseExpandedOnHeaderClick",
+  ),
   defaultGroupTitle: document.getElementById("defaultGroupTitle"),
   defaultGroupColor: document.getElementById("defaultGroupColor"),
   pinnedList: document.getElementById("pinnedList"),

@@ -90,6 +90,7 @@ const settings = {
   externalNewTabInActiveGroup: true,
   expandHeaderClick: false,
   suppressCollapseNewTab: true,
+  collapseExpandedOnHeaderClick: true,
   defaultGroupTitle: "其他",
   defaultGroupColor: "grey",
   pinnedGroups: [],
@@ -146,7 +147,13 @@ const chrome = {
         return key === "settings" ? { settings: clone(settings) } : {};
       },
       async set(values) {
-        if (values.settings) Object.assign(settings, clone(values.settings));
+        if (!values.settings) return;
+        const oldValue = clone(settings);
+        Object.assign(settings, clone(values.settings));
+        chrome.storage.onChanged.fire(
+          { settings: { oldValue, newValue: clone(settings) } },
+          "sync",
+        );
       },
     },
     session: {
@@ -188,6 +195,9 @@ const chrome = {
       for (const tabId of tabIds) findTab(tabId).groupId = -1;
     },
     async update(tabId, properties) {
+      if (properties.active === true) {
+        for (const entry of tabs) entry.active = false;
+      }
       Object.assign(findTab(tabId), properties);
       return clone(findTab(tabId));
     },
@@ -371,4 +381,33 @@ test("an external tab with an opener still honors the active-group setting", asy
   assert.ok(call, "external tab should be grouped");
   assert.equal(call.groupId, 300);
   assert.equal(findTab(7).groupId, 300);
+});
+
+test("header click can keep the expanded group open", async () => {
+  const alpha = findGroup(300);
+  alpha.collapsed = false;
+  for (const entry of tabs) entry.active = false;
+  findTab(4).active = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 4 });
+  await sleep(250);
+
+  findTab(2).pinned = true;
+  findTab(2).groupId = -1;
+  for (const entry of tabs) entry.active = false;
+  findTab(2).active = true;
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 2 });
+  await sleep(200);
+
+  await chrome.storage.sync.set({
+    settings: { ...settings, collapseExpandedOnHeaderClick: false },
+  });
+  await sleep(300);
+
+  alpha.collapsed = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  await sleep(500);
+
+  assert.equal(findGroup(300).collapsed, false, "Alpha stays expanded");
+  assert.equal(tabs.find((entry) => entry.active)?.groupId, 300);
 });

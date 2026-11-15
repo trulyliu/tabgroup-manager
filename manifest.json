@@ -4,8 +4,33 @@
   "version": "0.1.0",
   "minimum_chrome_version": "124",
   "description": "Groups first, one expanded group, new tabs in the active group",
-  "permissions": ["tabs", "tabGroups", "storage"],
-  "background": { "service_worker": "src/background.js", "type": "module" },
-  "options_ui": { "page": "src/options.html", "open_in_tab": true },
-  "action": { "default_popup": "src/popup.html", "default_title": "Tab Group Manager" }
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "src/options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "Tab Group Manager",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f6bff"/>
+      <stop offset="1" stop-color="#6b3df5"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)"/>
+  <!-- group container -->
+  <rect x="12" y="20" width="76" height="88" rx="22" fill="#ffffff"/>
+  <!-- grouped tabs -->
+  <rect x="24" y="36" width="22" height="54" rx="8" fill="#4b4ff0"/>
+  <rect x="52" y="36" width="22" height="54" rx="8" fill="#7a5bf5"/>
+  <!-- tab outside the group -->
+  <rect x="96" y="36" width="18" height="54" rx="7" fill="#ffffff" fill-opacity="0.45"/>
+</svg>

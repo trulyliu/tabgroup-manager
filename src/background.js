@@ -908,6 +908,47 @@ async function suppressCollapseReplacement(group) {
   schedule(group.windowId);
 }
 
+async function keepGroupExpandedAfterCollapse(group) {
+  avoidGroupByWindow.delete(group.windowId);
+  await suppressCollapseReplacement(group);
+
+  let live = null;
+  try {
+    live = await chrome.tabGroups.get(group.id);
+  } catch {
+    return;
+  }
+  if (!live || !live.collapsed) return;
+
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({ windowId: group.windowId });
+  } catch {
+    return;
+  }
+  const pick = tabs
+    .filter((tab) => tab.groupId === group.id)
+    .sort(
+      (a, b) =>
+        (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0) || (a.index ?? 0) - (b.index ?? 0),
+    )[0];
+  if (!pick) return;
+
+  lastActiveGroupByWindow.set(group.windowId, group.id);
+  try {
+    await chrome.tabs.update(pick.id, { active: true });
+  } catch {
+    return;
+  }
+  try {
+    const current = await chrome.tabGroups.get(group.id);
+    if (current.collapsed) await updateCollapsed(group.id, false);
+  } catch {
+    // Group vanished or Chrome already expanded it by activating its tab.
+  }
+  schedule(group.windowId);
+}
+
 async function handleGroupUpdated(group) {
   refreshPinnedSnapshots();
   schedule(group.windowId);
@@ -917,16 +958,23 @@ async function handleGroupUpdated(group) {
   if (!ready || !currentSettings.enabled) return;
 
   if (previous === false && group.collapsed === true && Date.now() >= warmupUntil) {
-    // The user explicitly collapsed this group. Do not immediately re-expand
-    // it just because the active tab is pinned: fall back to another group.
-    avoidGroupByWindow.set(group.windowId, group.id);
-    if (lastActiveGroupByWindow.get(group.windowId) === group.id) {
-      lastActiveGroupByWindow.delete(group.windowId);
-    }
-    if (currentSettings.suppressCollapseNewTab) {
-      void suppressCollapseReplacement(group).catch((err) =>
-        console.warn("[gtm] collapse cleanup failed", errorText(err)),
+    if (!currentSettings.collapseExpandedOnHeaderClick) {
+      // Keep the clicked group open; return focus to its most recent tab.
+      void keepGroupExpandedAfterCollapse(group).catch((err) =>
+        console.warn("[gtm] keep-expanded failed", errorText(err)),
       );
+    } else {
+      // The user explicitly collapsed this group. Do not immediately re-expand
+      // it just because the active tab is pinned: fall back to another group.
+      avoidGroupByWindow.set(group.windowId, group.id);
+      if (lastActiveGroupByWindow.get(group.windowId) === group.id) {
+        lastActiveGroupByWindow.delete(group.windowId);
+      }
+      if (currentSettings.suppressCollapseNewTab) {
+        void suppressCollapseReplacement(group).catch((err) =>
+          console.warn("[gtm] collapse cleanup failed", errorText(err)),
+        );
+      }
     }
   }
   if (group.collapsed === false && avoidGroupByWindow.get(group.windowId) === group.id) {
