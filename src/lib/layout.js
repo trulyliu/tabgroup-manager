@@ -34,14 +34,13 @@ export function findDefaultGroup(groups, { title, rememberedId } = {}) {
   return list.find((group) => group.title === title) ?? null;
 }
 
-/** Group with the freshest tab; optionally ignore one group. */
-export function mostRecentlyUsedGroupId(tabs, groups, excludeGroupId = null) {
+/** Group with the freshest tab; survives service-worker restarts. */
+export function mostRecentlyUsedGroupId(tabs, groups) {
   const known = new Set((groups ?? []).map((group) => group.id));
   let bestId = null;
   let bestAt = -Infinity;
   for (const tab of tabs ?? []) {
     if (!known.has(tab.groupId)) continue;
-    if (excludeGroupId != null && tab.groupId === excludeGroupId) continue;
     const at = Number.isFinite(tab.lastAccessed) ? tab.lastAccessed : 0;
     if (at > bestAt) {
       bestAt = at;
@@ -51,23 +50,13 @@ export function mostRecentlyUsedGroupId(tabs, groups, excludeGroupId = null) {
   return bestId;
 }
 
-function fallbackGroupId({
-  tabs,
-  groups,
-  rememberedGroupId,
-  keepLastWhenPinned,
-  avoidGroupId,
-}) {
+function fallbackGroupId({ tabs, groups, rememberedGroupId, keepLastWhenPinned }) {
   if (!keepLastWhenPinned) return null;
   const known = new Set((groups ?? []).map((group) => group.id));
-  if (
-    rememberedGroupId != null &&
-    rememberedGroupId !== avoidGroupId &&
-    known.has(rememberedGroupId)
-  ) {
+  if (rememberedGroupId != null && known.has(rememberedGroupId)) {
     return rememberedGroupId;
   }
-  return mostRecentlyUsedGroupId(tabs, groups, avoidGroupId);
+  return mostRecentlyUsedGroupId(tabs, groups);
 }
 
 /**
@@ -80,7 +69,6 @@ export function planCollapse({
   activeTab,
   rememberedGroupId = null,
   keepLastWhenPinned = true,
-  avoidGroupId = null,
 }) {
   const list = groups ?? [];
   const known = new Set(list.map((group) => group.id));
@@ -93,7 +81,6 @@ export function planCollapse({
       groups: list,
       rememberedGroupId,
       keepLastWhenPinned,
-      avoidGroupId,
     });
   }
   return list.map((group) => ({ groupId: group.id, collapsed: group.id !== target }));
@@ -203,6 +190,17 @@ export function findCollapseReplacement({
   return best?.id ?? null;
 }
 
+/** Most recently used tab of a group (index as tie-breaker). */
+export function pickGroupTab(tabs, groupId) {
+  const candidates = (tabs ?? []).filter((tab) => tab.groupId === groupId);
+  if (candidates.length === 0) return null;
+  candidates.sort(
+    (a, b) =>
+      (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0) || (a.index ?? 0) - (b.index ?? 0),
+  );
+  return candidates[0];
+}
+
 /** Where a newly created tab should go, or null to use the default group. */
 export function planNewTabTarget({
   tabs,
@@ -210,15 +208,8 @@ export function planNewTabTarget({
   activeTab,
   rememberedGroupId = null,
   keepLastWhenPinned = true,
-  avoidGroupId = null,
 }) {
   const known = new Set((groups ?? []).map((group) => group.id));
   if (activeTab && known.has(activeTab.groupId)) return activeTab.groupId;
-  return fallbackGroupId({
-    tabs,
-    groups,
-    rememberedGroupId,
-    keepLastWhenPinned,
-    avoidGroupId,
-  });
+  return fallbackGroupId({ tabs, groups, rememberedGroupId, keepLastWhenPinned });
 }

@@ -15,6 +15,7 @@ import {
   findDefaultGroup,
   isNewTabUrl,
   isUngroupedTab,
+  pickGroupTab,
   planCollapse,
   planGroupOrder,
   planNewTabTarget,
@@ -64,7 +65,6 @@ const burstSuppressUntil = new Map();
 const pendingPinnedTabs = new Map();
 const pendingCreatedTabs = new Map();
 const recentTabCreations = new Map();
-const avoidGroupByWindow = new Map();
 const restoreLocks = new Set();
 const recentGroupCreations = new Map();
 const collapsedStates = new Map();
@@ -354,11 +354,8 @@ async function applySingleExpanded(windowId, settings) {
   const tabs = sortTabs(rawTabs);
   const activeTab = tabs.find((tab) => tab.active) ?? null;
   const groupIds = new Set(groups.map((group) => group.id));
-  let avoidGroupId = avoidGroupByWindow.get(windowId) ?? null;
   if (activeTab && groupIds.has(activeTab.groupId)) {
     lastActiveGroupByWindow.set(windowId, activeTab.groupId);
-    avoidGroupByWindow.delete(windowId);
-    avoidGroupId = null;
   }
 
   const plan = planCollapse({
@@ -367,7 +364,6 @@ async function applySingleExpanded(windowId, settings) {
     activeTab,
     rememberedGroupId: lastActiveGroupByWindow.get(windowId) ?? null,
     keepLastWhenPinned: settings.keepLastWhenPinned,
-    avoidGroupId,
   });
   const byId = new Map(groups.map((group) => [group.id, group]));
   let retry = false;
@@ -521,9 +517,6 @@ function handleGroupRemoved(group) {
   collapsedStates.delete(group.id);
   headerActivationUntil.delete(group.id);
   recentGroupCreations.delete(group.id);
-  if (avoidGroupByWindow.get(group.windowId) === group.id) {
-    avoidGroupByWindow.delete(group.windowId);
-  }
 
   if (!ready || !currentSettings.enabled) return;
   if (!isPinnedTitle(currentSettings.pinnedGroups, group.title)) return;
@@ -796,7 +789,6 @@ async function classifyNewTab(tab) {
     activeTab,
     rememberedGroupId: lastActiveGroupByWindow.get(windowId) ?? null,
     keepLastWhenPinned: currentSettings.keepLastWhenPinned,
-    avoidGroupId: avoidGroupByWindow.get(windowId) ?? null,
   });
 
   if (target != null) {
@@ -908,8 +900,104 @@ async function suppressCollapseReplacement(group) {
   schedule(group.windowId);
 }
 
+async function headerNewTab(group) {
+  await suppressCollapseReplacement(group);
+
+  let live = null;
+  try {
+    live = await chrome.tabGroups.get(group.id);
+  } catch {
+    return;
+  }
+  if (!live) return;
+
+  let tab = null;
+  try {
+    tab = await chrome.tabs.create({
+      url: "chrome://newtab/",
+      windowId: group.windowId,
+      active: true,
+    });
+  } catch {
+    try {
+      tab = await chrome.tabs.create({
+        url: "about:blank",
+        windowId: group.windowId,
+        active: true,
+      });
+    } catch {
+      return;
+    }
+  }
+  if (tab?.id == null) return;
+
+  markIgnoredCreated(tab.id);
+  claimPendingCreated(tab.id);
+  await moveTabIntoTarget(tab.id, group.id);
+  lastActiveGroupByWindow.set(group.windowId, group.id);
+  try {
+    const current = await chrome.tabGroups.get(group.id);
+    if (current.collapsed) await updateCollapsed(group.id, false);
+  } catch {
+    // Group vanished; the normal default-group pass handles the orphan tab.
+  }
+  schedule(group.windowId);
+}
+
+async function headerCollapseToDefault(group) {
+  await suppressCollapseReplacement(group);
+
+  let tabs = [];
+  let groups = [];
+  try {
+    [tabs, groups] = await Promise.all([
+      chrome.tabs.query({ windowId: group.windowId }),
+      chrome.tabGroups.query({ windowId: group.windowId }),
+    ]);
+  } catch {
+    return;
+  }
+  const live = groups.find((entry) => entry.id === group.id);
+  if (!live || !live.collapsed) return;
+
+  if (live.title === currentSettings.defaultGroupTitle) {
+    await keepGroupExpandedAfterCollapse(group);
+    return;
+  }
+
+  const starts = new Map(groups.map((entry) => [entry.id, Number.MAX_SAFE_INTEGER]));
+  for (const tab of tabs) {
+    const current = starts.get(tab.groupId);
+    if (current != null && tab.index < current) starts.set(tab.groupId, tab.index);
+  }
+  const defaultGroup = groups
+    .filter(
+      (entry) =>
+        entry.id !== group.id &&
+        entry.title === currentSettings.defaultGroupTitle &&
+        starts.get(entry.id) !== Number.MAX_SAFE_INTEGER,
+    )
+    .sort((a, b) => starts.get(a.id) - starts.get(b.id))[0];
+  if (!defaultGroup) {
+    await keepGroupExpandedAfterCollapse(group);
+    return;
+  }
+  const pick = pickGroupTab(tabs, defaultGroup.id);
+  if (!pick) {
+    await keepGroupExpandedAfterCollapse(group);
+    return;
+  }
+
+  lastActiveGroupByWindow.set(group.windowId, defaultGroup.id);
+  try {
+    await chrome.tabs.update(pick.id, { active: true });
+  } catch {
+    return;
+  }
+  schedule(group.windowId);
+}
+
 async function keepGroupExpandedAfterCollapse(group) {
-  avoidGroupByWindow.delete(group.windowId);
   await suppressCollapseReplacement(group);
 
   let live = null;
@@ -926,12 +1014,7 @@ async function keepGroupExpandedAfterCollapse(group) {
   } catch {
     return;
   }
-  const pick = tabs
-    .filter((tab) => tab.groupId === group.id)
-    .sort(
-      (a, b) =>
-        (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0) || (a.index ?? 0) - (b.index ?? 0),
-    )[0];
+  const pick = pickGroupTab(tabs, group.id);
   if (!pick) return;
 
   lastActiveGroupByWindow.set(group.windowId, group.id);
@@ -958,27 +1041,20 @@ async function handleGroupUpdated(group) {
   if (!ready || !currentSettings.enabled) return;
 
   if (previous === false && group.collapsed === true && Date.now() >= warmupUntil) {
-    if (!currentSettings.collapseExpandedOnHeaderClick) {
-      // Keep the clicked group open; return focus to its most recent tab.
+    const action = currentSettings.expandedGroupHeaderClick;
+    if (action === "newtab") {
+      void headerNewTab(group).catch((err) =>
+        console.warn("[gtm] header new-tab failed", errorText(err)),
+      );
+    } else if (action === "collapse") {
+      void headerCollapseToDefault(group).catch((err) =>
+        console.warn("[gtm] header collapse failed", errorText(err)),
+      );
+    } else {
       void keepGroupExpandedAfterCollapse(group).catch((err) =>
         console.warn("[gtm] keep-expanded failed", errorText(err)),
       );
-    } else {
-      // The user explicitly collapsed this group. Do not immediately re-expand
-      // it just because the active tab is pinned: fall back to another group.
-      avoidGroupByWindow.set(group.windowId, group.id);
-      if (lastActiveGroupByWindow.get(group.windowId) === group.id) {
-        lastActiveGroupByWindow.delete(group.windowId);
-      }
-      if (currentSettings.suppressCollapseNewTab) {
-        void suppressCollapseReplacement(group).catch((err) =>
-          console.warn("[gtm] collapse cleanup failed", errorText(err)),
-        );
-      }
     }
-  }
-  if (group.collapsed === false && avoidGroupByWindow.get(group.windowId) === group.id) {
-    avoidGroupByWindow.delete(group.windowId);
   }
 
   if (!currentSettings.singleExpanded) return;
@@ -1001,13 +1077,7 @@ async function handleGroupUpdated(group) {
   } catch {
     return;
   }
-  const candidates = tabs
-    .filter((tab) => tab.groupId === group.id)
-    .sort(
-      (a, b) =>
-        (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0) || (a.index ?? 0) - (b.index ?? 0),
-    );
-  const pick = candidates[0];
+  const pick = pickGroupTab(tabs, group.id);
   if (!pick) return;
 
   headerActivationUntil.set(group.id, Date.now() + 1000);
@@ -1153,7 +1223,6 @@ chrome.windows.onRemoved.addListener((windowId) => {
   closingWindows.delete(windowId);
   recentCreations.delete(windowId);
   burstSuppressUntil.delete(windowId);
-  avoidGroupByWindow.delete(windowId);
   clearTimeout(scheduleTimers.get(windowId));
   scheduleTimers.delete(windowId);
   windowChains.delete(windowId);

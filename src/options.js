@@ -20,8 +20,6 @@ const CHECKBOX_KEYS = [
   "keepLastWhenPinned",
   "externalNewTabInActiveGroup",
   "expandHeaderClick",
-  "suppressCollapseNewTab",
-  "collapseExpandedOnHeaderClick",
 ];
 
 const els = {
@@ -32,10 +30,7 @@ const els = {
   keepLastWhenPinned: document.getElementById("keepLastWhenPinned"),
   externalNewTabInActiveGroup: document.getElementById("externalNewTabInActiveGroup"),
   expandHeaderClick: document.getElementById("expandHeaderClick"),
-  suppressCollapseNewTab: document.getElementById("suppressCollapseNewTab"),
-  collapseExpandedOnHeaderClick: document.getElementById(
-    "collapseExpandedOnHeaderClick",
-  ),
+  expandedGroupHeaderClick: document.getElementById("expandedGroupHeaderClick"),
   defaultGroupTitle: document.getElementById("defaultGroupTitle"),
   defaultGroupColor: document.getElementById("defaultGroupColor"),
   pinnedList: document.getElementById("pinnedList"),
@@ -74,6 +69,7 @@ function buildColorOptions() {
 
 function renderForm(settings) {
   for (const key of CHECKBOX_KEYS) els[key].checked = Boolean(settings[key]);
+  els.expandedGroupHeaderClick.value = settings.expandedGroupHeaderClick;
   els.defaultGroupTitle.value = settings.defaultGroupTitle;
   els.defaultGroupColor.value = settings.defaultGroupColor;
 }
@@ -207,6 +203,9 @@ for (const key of CHECKBOX_KEYS) {
     void savePatch({ [key]: els[key].checked });
   });
 }
+els.expandedGroupHeaderClick.addEventListener("change", () => {
+  void savePatch({ expandedGroupHeaderClick: els.expandedGroupHeaderClick.value });
+});
 els.defaultGroupTitle.addEventListener("change", () => {
   void savePatch({ defaultGroupTitle: els.defaultGroupTitle.value });
 });

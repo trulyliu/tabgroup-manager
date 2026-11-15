@@ -47,13 +47,17 @@
           <span>点击分组标题展开时切换到该分组最近的标签页</span>
         </label>
         <label class="row">
-          <input type="checkbox" id="suppressCollapseNewTab" />
-          <span>收起当前分组时不新建空白标签页（Chrome 默认会新建一个）</span>
+          <span>点击已展开的分组标题</span>
+          <select id="expandedGroupHeaderClick">
+            <option value="newtab">在分组内新建一个标签页</option>
+            <option value="collapse">折叠非默认分组并展开默认分组</option>
+            <option value="noaction">不改变当前分组</option>
+          </select>
         </label>
-        <label class="row">
-          <input type="checkbox" id="collapseExpandedOnHeaderClick" />
-          <span>点击已展开的分组标题时收起该分组；关闭则保持展开</span>
-        </label>
+        <p class="hint">
+          三种行为都不受固定标签页影响。选择“折叠”时，点击默认分组不会改变；没有默认分组时保持当前分组。
+          “新建标签页”会关闭 Chrome 为切换焦点临时创建的空白页。
+        </p>
       </section>
 
       <section>

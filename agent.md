@@ -54,10 +54,10 @@ flowchart LR
 - `chrome.tabs.group` 绝对不能收到固定标签页：源码文档明确会把它取消固定。`ensureDefaultGroup` 已过滤。
 - Chrome 会自动展开包含活动标签页的分组，不要试图折叠它。
 - `chrome.tabGroups.query` 返回顺序不代表标签栏顺序；判断顺序必须用各分组标签页的最小 `index`（这也是测试陷阱）。
-- 用户点击已展开分组的标题时，Chrome 可能先激活固定标签页再折叠分组；`keepLastWhenPinned` 的普通逻辑会把分组重新展开。`avoidGroupByWindow` 记录这次显式折叠，归一化时排除该分组并改用默认/其他分组，保证有无固定标签页行为一致。`collapseExpandedOnHeaderClick` 关闭时不写 avoid，而是由 `keepGroupExpandedAfterCollapse` 关闭占位页、重新展开分组并激活其最近标签页。
+- 用户点击已展开分组的标题时，Chrome 可能先激活固定标签页再折叠分组；`keepLastWhenPinned` 的普通逻辑会把分组重新展开。三种模式统一在 collapse 事件后接管，且不读取 pinned 状态：`headerNewTab`（关闭占位页后组内新建并激活 NTP）、`headerCollapseToDefault`（非默认组收起、默认组展开并激活 MRU；默认组/无默认组走保持逻辑）、`keepGroupExpandedAfterCollapse`（重新展开并激活原组 MRU）。
 - 外部程序新标签页在 Chrome 157 带有 `openerTabId`（指向当时活动页），不能按链接标签页跳过；仍由 `externalNewTabInActiveGroup` 决定。
 - `tabs.onUpdated` 必须同时处理 `groupId` 和 `pinned`：固定标签页不属于分组，取消固定后 groupId 仍是 -1，只有 `pinned` 变化事件可用；不调度归一化就会一直留在未分组状态。
-- Chrome 在“收起活动分组且无其他可切换标签页（无固定标签页、无其他展开分组）”时会新建一个空白页（`BrowserTabStripController::ToggleTabGroupCollapsedState`）。扩展只能事后识别并关闭；`suppressCollapseNewTab` 默认开启。识别条件见 `findCollapseReplacement`：300ms 内创建、空/NTP URL、活动、未固定、opener 在分组内（不检查当前分组，快速路径可能已把它归组）。
+- Chrome 在“收起活动分组且无其他可切换标签页（无固定标签页、无其他展开分组）”时会新建一个空白页（`BrowserTabStripController::ToggleTabGroupCollapsedState`）。三种点击行为都只能事后识别并关闭；识别条件见 `findCollapseReplacement`：300ms 内创建、空/NTP URL、活动、未固定、opener 在分组内（不检查当前分组，快速路径可能已把它归组）。`newtab` 模式关闭占位页后只创建自己的目标标签页。
 - 内存态（`lastActiveGroupByWindow`、`defaultGroupByWindow`、`collapsedStates`）在 worker 重启后为空；归一化必须能靠标题、`lastAccessed` 和实时查询恢复，不能依赖这些 Map 一定存在。
 - 固定分组快照在启动/worker 重启后从实时分组重建；不要信任持久化里可能被复用的 group ID。
 
@@ -111,6 +111,28 @@ flowchart LR
 - 弹窗只做只读统计 + 总开关 + 两个按钮；不要在弹窗复制完整设置。
 - `chrome.runtime.sendMessage` 从 service worker 发给自己不会触发自身的 `onMessage`；需要内部触发时用 `chrome.storage` 变更或从扩展页面发送。
 
+
+## 点击已展开分组标题：行为矩阵
+
+`expandedGroupHeaderClick` 三选一。选组与焦点结果都不读取 pinned 状态。
+
+| 点击对象 | `newtab` | `collapse` | `noaction` |
+| --- | --- | --- | --- |
+| 非默认组 G，默认组存在 | 关闭占位页；G 内新建并激活 NTP；G 展开 | G 收起；默认组展开并激活其 MRU 标签页 | G 保持展开并激活其 MRU 标签页 |
+| 默认组 G，其他组存在 | 关闭占位页；G 内新建并激活 NTP；G 展开 | 不做分组变更；G 保持展开并激活其 MRU 标签页 | 同 `collapse` 的默认组列 |
+| 非默认组 G，无默认组 | 关闭占位页；G 内新建并激活 NTP；G 展开 | 无默认组可展开，按 `noaction` 处理 | G 保持展开并激活其 MRU 标签页 |
+| 唯一分组 G（默认或非默认） | 同第一行 | 按 `noaction` 处理 | 同左 |
+| pinned 为无 / 非活动 / 活动 | 结果相同；活动标签页是新建 NTP | 结果相同；活动标签页是目标组 MRU | 结果相同；活动标签页是原组 MRU |
+
+补充规则：
+
+- “MRU 标签页”按 `lastAccessed` 降序，平局取 `index` 最小。
+- 默认组按 `defaultGroupTitle` 精确匹配；多个同名默认组取标签栏顺序中的第一个（选择逻辑只用于 `collapse`）。
+- `collapse` 只在默认组有标签页时生效；空组不存在，因此“有默认组”即“默认组有标签页”。
+- 所有模式都会关闭 Chrome 的占位页；`newtab` 额外创建一个组内 NTP。
+- `keepLastWhenPinned` 只影响普通激活固定标签页，不影响上述三种点击行为。
+- `expandHeaderClick` 只影响点击**折叠**分组标题，不影响已展开分组。
+
 ## 修改后的回归清单
 
 ```bash
@@ -122,7 +144,7 @@ npm test
 1. 固定标签页 + A/B 分组 + 未分组标签页 → 默认分组建立、分组在前、只展开一个。
 2. 点击折叠分组标题 → 切到该分组最近标签页；关闭该开关后 → 分组重新折叠。
 3. A 分组活动时 Ctrl+T → 新标签页在 A 末尾；固定标签页活动且 `keepLastWhenPinned` 开关两种状态。固定任意标签页后再取消固定 → 该标签页进入默认分组；有/无其他固定标签页各验证一次。
-4. 点击一个已展开的非默认分组标题：`collapseExpandedOnHeaderClick` 开启时，有/无固定标签页都收起该分组并展开另一个分组（上次/最近使用的其他分组），不新增标签页；关闭时，两种情况下该分组都保持展开且焦点回到它的最近标签页。再分别关闭 `suppressCollapseNewTab` 验证 Chrome 原生占位页行为。
+4. 按“行为矩阵”逐项验证三种 `expandedGroupHeaderClick`：多个组 + 默认组、无默认组、点击默认组、唯一组；每种都在 pinned 无/非活动/活动下点击一次，确认分组与活动标签页一致；`newtab` 模式确认只多出一个组内 NTP（占位页被关闭）。
 5. 页面链接 Ctrl+点击 / `window.open` → 不抢标签页；外部程序打开（终端 `open`/命令行，注意其 opener 非空）→ 开关生效，打开后进入当前展开分组。
 6. 钉住 A 后关闭最后一个标签页 → 空白 NTP 重建；取消分组 → 原标签页归组；移动分组到新窗口 / 关闭窗口 → 不补空白。
 7. 取消钉住后删除 → 不再重建；Chrome 中重命名 → 失去钉住。

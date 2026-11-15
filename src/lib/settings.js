@@ -17,6 +17,8 @@ const MAX_TITLE_LENGTH = 30;
 const MAX_PINNED_GROUPS = 50;
 const FALLBACK_DEFAULT_TITLE = "其他";
 
+export const HEADER_CLICK_ACTIONS = Object.freeze(["newtab", "collapse", "noaction"]);
+
 export const DEFAULT_SETTINGS = Object.freeze({
   enabled: true,
   groupsFirst: true,
@@ -25,8 +27,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   keepLastWhenPinned: true,
   externalNewTabInActiveGroup: true,
   expandHeaderClick: true,
-  suppressCollapseNewTab: true,
-  collapseExpandedOnHeaderClick: true,
+  expandedGroupHeaderClick: "collapse",
   defaultGroupTitle: FALLBACK_DEFAULT_TITLE,
   defaultGroupColor: "grey",
   pinnedGroups: [],
@@ -57,7 +58,8 @@ function sanitizePinnedGroups(value) {
 
 /** Merge stored values over defaults, coercing every field to a valid shape. */
 export function normalizeSettings(stored) {
-  const merged = { ...DEFAULT_SETTINGS, ...(stored && typeof stored === "object" ? stored : {}) };
+  const raw = stored && typeof stored === "object" ? stored : {};
+  const merged = { ...DEFAULT_SETTINGS, ...raw };
   return {
     enabled: Boolean(merged.enabled),
     groupsFirst: Boolean(merged.groupsFirst),
@@ -66,8 +68,11 @@ export function normalizeSettings(stored) {
     keepLastWhenPinned: Boolean(merged.keepLastWhenPinned),
     externalNewTabInActiveGroup: Boolean(merged.externalNewTabInActiveGroup),
     expandHeaderClick: Boolean(merged.expandHeaderClick),
-    suppressCollapseNewTab: Boolean(merged.suppressCollapseNewTab),
-    collapseExpandedOnHeaderClick: Boolean(merged.collapseExpandedOnHeaderClick),
+    expandedGroupHeaderClick: HEADER_CLICK_ACTIONS.includes(raw.expandedGroupHeaderClick)
+      ? raw.expandedGroupHeaderClick
+      : raw.collapseExpandedOnHeaderClick === false
+        ? "noaction"
+        : "collapse",
     defaultGroupTitle: clampTitle(merged.defaultGroupTitle) || FALLBACK_DEFAULT_TITLE,
     defaultGroupColor: normalizeColor(merged.defaultGroupColor),
     pinnedGroups: sanitizePinnedGroups(merged.pinnedGroups),

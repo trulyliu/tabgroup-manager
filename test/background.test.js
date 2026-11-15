@@ -89,8 +89,7 @@ const settings = {
   keepLastWhenPinned: true,
   externalNewTabInActiveGroup: true,
   expandHeaderClick: false,
-  suppressCollapseNewTab: true,
-  collapseExpandedOnHeaderClick: true,
+  expandedGroupHeaderClick: "collapse",
   defaultGroupTitle: "其他",
   defaultGroupColor: "grey",
   pinnedGroups: [],
@@ -203,6 +202,9 @@ const chrome = {
     },
     async create({ windowId, url, active = false }) {
       calls.create.push({ windowId, url, active });
+      if (active) {
+        for (const entry of tabs) entry.active = false;
+      }
       const tab = {
         id: nextTabId++,
         windowId,
@@ -343,7 +345,29 @@ test("collapsing the expanded group while a pinned tab is active expands another
 
   assert.equal(findGroup(300).collapsed, true);
   assert.equal(findGroup(100).collapsed, false);
-  assert.equal(findTab(2).active, true);
+  assert.equal(tabs.find((entry) => entry.active)?.groupId, 100);
+  assert.equal(findTab(2).active, false);
+});
+
+test("the same fallback is used without a pinned tab", async () => {
+  const alpha = findGroup(300);
+  findTab(2).pinned = false;
+  findTab(2).groupId = -1;
+  findGroup(100).collapsed = true;
+  alpha.collapsed = false;
+  for (const entry of tabs) entry.active = false;
+  findTab(4).active = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 4 });
+  await sleep(300);
+
+  alpha.collapsed = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  await sleep(300);
+
+  assert.equal(findGroup(300).collapsed, true);
+  assert.equal(findGroup(100).collapsed, false);
+  assert.equal(tabs.find((entry) => entry.active)?.groupId, 100);
 });
 
 test("an external tab with an opener still honors the active-group setting", async () => {
@@ -400,7 +424,7 @@ test("header click can keep the expanded group open", async () => {
   await sleep(200);
 
   await chrome.storage.sync.set({
-    settings: { ...settings, collapseExpandedOnHeaderClick: false },
+    settings: { ...settings, expandedGroupHeaderClick: "noaction" },
   });
   await sleep(300);
 
@@ -410,4 +434,95 @@ test("header click can keep the expanded group open", async () => {
 
   assert.equal(findGroup(300).collapsed, false, "Alpha stays expanded");
   assert.equal(tabs.find((entry) => entry.active)?.groupId, 300);
+});
+
+test("with no fallback group the clicked group stays expanded, pinned or not", async () => {
+  const alpha = findGroup(300);
+  findTab(1).groupId = 300; // default group becomes empty and is no longer a candidate
+  findTab(2).pinned = true;
+  findTab(2).groupId = -1;
+  alpha.collapsed = false;
+  for (const entry of tabs) entry.active = false;
+  findTab(2).active = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 2 });
+  await sleep(250);
+
+  alpha.collapsed = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  await sleep(400);
+  assert.equal(findGroup(300).collapsed, false);
+  assert.equal(tabs.find((entry) => entry.active)?.groupId, 300);
+
+  // Same outcome with no pinned tab.
+  findTab(2).pinned = false;
+  findTab(2).groupId = -1;
+  alpha.collapsed = false;
+  for (const entry of tabs) entry.active = false;
+  findTab(4).active = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 4 });
+  await sleep(250);
+
+  alpha.collapsed = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  await sleep(400);
+  assert.equal(findGroup(300).collapsed, false);
+  assert.equal(tabs.find((entry) => entry.active)?.groupId, 300);
+});
+
+test("header newtab action creates a tab inside the clicked group", async () => {
+  const alpha = findGroup(300);
+  await chrome.storage.sync.set({
+    settings: { ...settings, expandedGroupHeaderClick: "newtab" },
+  });
+  await sleep(300);
+
+  alpha.collapsed = false;
+  for (const entry of tabs) entry.active = false;
+  findTab(4).active = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 4 });
+  await sleep(250);
+
+  const before = tabs.length;
+  calls.create.length = 0;
+  alpha.collapsed = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  await sleep(500);
+
+  assert.equal(calls.create.length, 1);
+  assert.equal(calls.create[0].url, "chrome://newtab/");
+  assert.equal(tabs.length, before + 1);
+  const created = tabs[tabs.length - 1];
+  assert.equal(created.groupId, 300);
+  assert.equal(tabs.find((entry) => entry.active)?.id, created.id);
+  assert.equal(findGroup(300).collapsed, false);
+});
+
+test("collapse action does nothing when the default group is clicked", async () => {
+  const defaultGroup = findGroup(100);
+  const alpha = findGroup(300);
+  findTab(1).groupId = 100;
+  await chrome.storage.sync.set({
+    settings: { ...settings, expandedGroupHeaderClick: "collapse" },
+  });
+  await sleep(300);
+
+  defaultGroup.collapsed = false;
+  alpha.collapsed = true;
+  for (const entry of tabs) entry.active = false;
+  findTab(1).active = true;
+  chrome.tabGroups.onUpdated.fire(clone(defaultGroup));
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: 1 });
+  await sleep(250);
+
+  const before = tabs.length;
+  defaultGroup.collapsed = true;
+  chrome.tabGroups.onUpdated.fire(clone(defaultGroup));
+  await sleep(400);
+
+  assert.equal(tabs.length, before);
+  assert.equal(findGroup(100).collapsed, false);
+  assert.equal(tabs.find((entry) => entry.active)?.groupId, 100);
 });
