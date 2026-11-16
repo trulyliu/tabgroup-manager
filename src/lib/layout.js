@@ -25,11 +25,16 @@ export function isNewTabUrl(url) {
   return NEW_TAB_URLS.has(bare);
 }
 
+/**
+ * The remembered id wins only while it still looks like the default group:
+ * same title, or still untitled because we created it a moment ago and the
+ * title update has not landed yet. A group the user renamed is theirs now.
+ */
 export function findDefaultGroup(groups, { title, rememberedId } = {}) {
   const list = Array.isArray(groups) ? groups : [];
   if (rememberedId != null) {
     const remembered = list.find((group) => group.id === rememberedId);
-    if (remembered) return remembered;
+    if (remembered && (remembered.title === title || !remembered.title)) return remembered;
   }
   return list.find((group) => group.title === title) ?? null;
 }
@@ -105,12 +110,21 @@ export function mostRecentlyUsedGroupId(tabs, groups) {
   return bestId;
 }
 
-function fallbackGroupId({ tabs, groups, rememberedGroupId, keepLastWhenPinned }) {
-  if (!keepLastWhenPinned) return null;
+/**
+ * Group to keep expanded when the active tab is not in a known group.
+ * `keepLastWhenPinned` only governs a *pinned* active tab. An ungrouped,
+ * unpinned active tab (typically a brand-new Ctrl+T tab that is still being
+ * classified) keeps the remembered group; with keepLast off there is no MRU
+ * guess, so "pinned tab activated" (which clears the memory) still yields
+ * null and routes new tabs to the default group.
+ */
+function fallbackGroupId({ tabs, groups, activeTab, rememberedGroupId, keepLastWhenPinned }) {
+  if (activeTab?.pinned && !keepLastWhenPinned) return null;
   const known = new Set((groups ?? []).map((group) => group.id));
   if (rememberedGroupId != null && known.has(rememberedGroupId)) {
     return rememberedGroupId;
   }
+  if (!keepLastWhenPinned) return null;
   return mostRecentlyUsedGroupId(tabs, groups);
 }
 
@@ -134,6 +148,7 @@ export function planCollapse({
     target = fallbackGroupId({
       tabs,
       groups: list,
+      activeTab,
       rememberedGroupId,
       keepLastWhenPinned,
     });
@@ -266,5 +281,5 @@ export function planNewTabTarget({
 }) {
   const known = new Set((groups ?? []).map((group) => group.id));
   if (activeTab && known.has(activeTab.groupId)) return activeTab.groupId;
-  return fallbackGroupId({ tabs, groups, rememberedGroupId, keepLastWhenPinned });
+  return fallbackGroupId({ tabs, groups, activeTab, rememberedGroupId, keepLastWhenPinned });
 }

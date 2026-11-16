@@ -58,6 +58,8 @@ async function savePatch(patch) {
     await refresh();
   } catch (err) {
     setStatus(String(err?.message ?? err), true);
+    // Show what is actually stored, not the rejected input.
+    await refresh().catch(() => {});
   }
 }
 

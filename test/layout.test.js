@@ -453,3 +453,58 @@ test("planNewTabTarget returns null when no group exists", () => {
     null,
   );
 });
+
+// keepLastWhenPinned governs a pinned active tab only. A fresh Ctrl+T tab is
+// the active tab while it is classified; it is unpinned and ungrouped, and must
+// still land in the remembered (expanded) group.
+test("planNewTabTarget keeps the remembered group for an unpinned new tab when keepLast is off", () => {
+  const groups = [group(1, "其他"), group(2, "Alpha")];
+  const tabs = [tab(10, 0, 1), tab(11, 1, 2), tab(12, 2, TAB_GROUP_ID_NONE)];
+  assert.equal(
+    planNewTabTarget({
+      tabs,
+      groups,
+      activeTab: tabs[2],
+      rememberedGroupId: 2,
+      keepLastWhenPinned: false,
+    }),
+    2,
+  );
+  // Without a remembered group keepLast-off does not guess an MRU group.
+  assert.equal(
+    planNewTabTarget({
+      tabs,
+      groups,
+      activeTab: tabs[2],
+      rememberedGroupId: null,
+      keepLastWhenPinned: false,
+    }),
+    null,
+  );
+});
+
+test("planCollapse keeps the remembered group for an unpinned ungrouped active tab when keepLast is off", () => {
+  const groups = [group(1, "A"), group(2, "B")];
+  const tabs = [tab(10, 0, 1), tab(11, 1, 2), tab(12, 2, TAB_GROUP_ID_NONE)];
+  assert.deepEqual(
+    planCollapse({
+      tabs,
+      groups,
+      activeTab: tabs[2],
+      rememberedGroupId: 2,
+      keepLastWhenPinned: false,
+    }),
+    [
+      { groupId: 1, collapsed: true },
+      { groupId: 2, collapsed: false },
+    ],
+  );
+});
+
+test("findDefaultGroup ignores a remembered group the user renamed", () => {
+  const groups = [group(1, "Renamed"), group(2, "其他")];
+  assert.equal(findDefaultGroup(groups, { title: "其他", rememberedId: 1 }).id, 2);
+  assert.equal(findDefaultGroup([group(1, "Renamed")], { title: "其他", rememberedId: 1 }), null);
+  // A just-created group whose title update has not landed yet still counts.
+  assert.equal(findDefaultGroup([group(1, "")], { title: "其他", rememberedId: 1 }).id, 1);
+});

@@ -54,8 +54,88 @@ let bootPromise = null;
 let warmupUntil = 0;
 let currentSettings = normalizeSettings(null);
 
-const lastActiveGroupByWindow = new Map();
-const defaultGroupByWindow = new Map();
+// MV3 workers are killed after ~30s idle and revived by the next event. That
+// event is delivered before boot() finishes, so handlers queue here and run as
+// soon as the worker is ready. During a cold browser start the quiet gate is
+// deliberately read-only, so queued events are dropped instead.
+const deferredEvents = [];
+let dropDeferredEvents = false;
+
+function onReady(run) {
+  if (ready) {
+    run();
+    return;
+  }
+  if (dropDeferredEvents) return;
+  deferredEvents.push(run);
+}
+
+function drainDeferredEvents() {
+  for (const run of deferredEvents.splice(0)) {
+    try {
+      run();
+    } catch (err) {
+      console.warn("[gtm] deferred event failed", errorText(err));
+    }
+  }
+}
+
+const RUNTIME_STATE_KEY = "runtimeState";
+const RUNTIME_STATE_WRITE_MS = 20;
+let runtimeStateTimer = null;
+
+/**
+ * Small in-memory state that event handling depends on (the collapsed state
+ * before an onUpdated, which group was expanded, which group is the default).
+ * Mirrored to chrome.storage.session so a revived worker still has it; that
+ * area is cleared on browser restart, so group ids in it are never stale
+ * across sessions.
+ */
+class PersistedMap extends Map {
+  set(key, value) {
+    super.set(key, value);
+    persistRuntimeState();
+    return this;
+  }
+
+  delete(key) {
+    const removed = super.delete(key);
+    if (removed) persistRuntimeState();
+    return removed;
+  }
+
+  load(entries) {
+    if (!entries || typeof entries !== "object") return;
+    for (const [key, value] of Object.entries(entries)) {
+      const id = Number(key);
+      if (Number.isFinite(id) && !super.has(id)) super.set(id, value);
+    }
+  }
+
+  toJSON() {
+    return Object.fromEntries(this);
+  }
+}
+
+const lastActiveGroupByWindow = new PersistedMap();
+const defaultGroupByWindow = new PersistedMap();
+const collapsedStates = new PersistedMap();
+
+function persistRuntimeState() {
+  clearTimeout(runtimeStateTimer);
+  runtimeStateTimer = setTimeout(() => {
+    runtimeStateTimer = null;
+    const value = {
+      collapsed: collapsedStates.toJSON(),
+      lastActive: lastActiveGroupByWindow.toJSON(),
+      defaultGroups: defaultGroupByWindow.toJSON(),
+    };
+    void chrome.storage.session
+      .set({ [RUNTIME_STATE_KEY]: value })
+      .catch((err) => console.warn("[gtm] runtime state persist failed", errorText(err)));
+  }, RUNTIME_STATE_WRITE_MS);
+}
+
 const windowChains = new Map();
 const scheduleTimers = new Map();
 const retryCounts = new Map();
@@ -71,7 +151,6 @@ const pendingCreatedTabs = new Map();
 const recentTabCreations = new Map();
 const restoreLocks = new Set();
 const recentGroupCreations = new Map();
-const collapsedStates = new Map();
 const headerActivationUntil = new Map();
 const headerActionUntil = new Map();
 
@@ -87,14 +166,18 @@ let lastTabMoveAt = 0;
 
 function markIgnoredCreated(tabId) {
   if (tabId == null) return;
-  ignoreCreatedTabs.set(tabId, Date.now() + IGNORE_CREATED_TTL_MS);
+  const now = Date.now();
+  for (const [id, expiresAt] of ignoreCreatedTabs) {
+    if (expiresAt < now) ignoreCreatedTabs.delete(id);
+  }
+  ignoreCreatedTabs.set(tabId, now + IGNORE_CREATED_TTL_MS);
 }
 
 function isIgnoredCreated(tabId) {
-  const at = ignoreCreatedTabs.get(tabId);
-  if (at == null) return false;
+  const expiresAt = ignoreCreatedTabs.get(tabId);
+  if (expiresAt == null) return false;
   ignoreCreatedTabs.delete(tabId);
-  return true;
+  return expiresAt >= Date.now();
 }
 
 /** Tabs recently removed from a pinned group; excluded from default grouping. */
@@ -187,15 +270,29 @@ function rememberCollapsed(group) {
 }
 
 async function updateCollapsed(groupId, collapsed) {
-  collapsedStates.set(groupId, collapsed);
-  await chrome.tabGroups.update(groupId, { collapsed });
+  await updateGroupPresentation(groupId, { collapsed });
 }
 
+/**
+ * Record the collapsed state we are about to set *before* the call, so the
+ * resulting onUpdated is recognized as ours and not as a header click. If the
+ * call fails nothing changed in Chrome, so restore the previous record;
+ * otherwise the next real user collapse/expand is misread.
+ */
 async function updateGroupPresentation(groupId, properties) {
-  if (typeof properties.collapsed === "boolean") {
-    collapsedStates.set(groupId, properties.collapsed);
+  const tracksCollapse = typeof properties.collapsed === "boolean";
+  const hadState = collapsedStates.has(groupId);
+  const previous = collapsedStates.get(groupId);
+  if (tracksCollapse) collapsedStates.set(groupId, properties.collapsed);
+  try {
+    await chrome.tabGroups.update(groupId, properties);
+  } catch (err) {
+    if (tracksCollapse && collapsedStates.get(groupId) === properties.collapsed) {
+      if (hadState) collapsedStates.set(groupId, previous);
+      else collapsedStates.delete(groupId);
+    }
+    throw err;
   }
-  await chrome.tabGroups.update(groupId, properties);
 }
 
 function isNormalWindowType(win) {
@@ -639,8 +736,11 @@ function isNormalGroupTitle(title) {
   return typeof title === "string" && title !== "";
 }
 
-async function restorePinnedGroup(group, snapshot, lockKey, attempt) {
+async function restorePinnedGroup(group, snapshot, lockKey, attempt, carry = null) {
   restoreLocks.add(lockKey);
+  // Shared across the retry so a blank tab created by a failed first attempt
+  // is reused instead of leaking a second one into the default group.
+  const state = carry ?? { blankTabId: null };
   const claimed = [];
   for (const tabId of snapshot.tabIds) {
     if (isPendingPinned(tabId)) continue;
@@ -651,7 +751,7 @@ async function restorePinnedGroup(group, snapshot, lockKey, attempt) {
   let outcome = "done";
   try {
     try {
-      outcome = await attemptPinnedRestore(snapshot, attempt);
+      outcome = await attemptPinnedRestore(snapshot, attempt, state);
     } catch (err) {
       const message = errorText(err);
       if (attempt === 0 && DRAG_ERROR.test(message)) {
@@ -664,10 +764,14 @@ async function restorePinnedGroup(group, snapshot, lockKey, attempt) {
       // Keep the pending claims alive across the retry so normalization cannot
       // sweep the surviving tabs into the default group.
       await sleep(300);
-      await restorePinnedGroup(group, snapshot, lockKey, 1);
+      await restorePinnedGroup(group, snapshot, lockKey, 1, state);
     }
   } finally {
     for (const tabId of claimed) releasePendingPinned(tabId);
+    if (carry == null && state.blankTabId != null) {
+      await discardOrphanBlankTab(state.blankTabId);
+      releasePendingPinned(state.blankTabId);
+    }
     restoreLocks.delete(lockKey);
     pinnedSnapshots.delete(group.id);
     refreshPinnedSnapshots();
@@ -675,7 +779,7 @@ async function restorePinnedGroup(group, snapshot, lockKey, attempt) {
   }
 }
 
-async function attemptPinnedRestore(snapshot, attempt) {
+async function attemptPinnedRestore(snapshot, attempt, state = { blankTabId: null }) {
   await sleep(RESTORE_SETTLE_MS);
 
   if (isClosingWindow(snapshot.windowId)) return "done";
@@ -768,7 +872,7 @@ async function attemptPinnedRestore(snapshot, attempt) {
       throw err;
     }
   } else {
-    const blankTabId = await createBlankTab(snapshot.windowId);
+    const blankTabId = await reuseOrCreateBlankTab(snapshot.windowId, state);
     if (blankTabId == null) return "done";
     try {
       groupId = await chrome.tabs.group({
@@ -836,7 +940,36 @@ async function createBlankTab(windowId) {
   }
   if (tab?.id == null) return null;
   markIgnoredCreated(tab.id);
+  // Until it is grouped, keep the default-group pass away from it.
+  claimPendingPinned(tab.id, null);
   return tab.id;
+}
+
+/** A placeholder whose grouping never succeeded would only clutter the default group. */
+async function discardOrphanBlankTab(tabId) {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.groupId === TAB_GROUP_ID_NONE && !tab.pinned) await chrome.tabs.remove(tabId);
+  } catch {
+    // Already gone.
+  }
+}
+
+/** The blank tab of a failed first attempt, if it still exists ungrouped. */
+async function reuseOrCreateBlankTab(windowId, state) {
+  if (state.blankTabId != null) {
+    try {
+      const existing = await chrome.tabs.get(state.blankTabId);
+      if (existing.windowId === windowId && existing.groupId === TAB_GROUP_ID_NONE) {
+        claimPendingPinned(existing.id, null);
+        return existing.id;
+      }
+    } catch {
+      // Closed meanwhile; create a fresh one.
+    }
+  }
+  state.blankTabId = await createBlankTab(windowId);
+  return state.blankTabId;
 }
 
 // ------------------------------------------------------------------ new tabs
@@ -864,9 +997,19 @@ async function classifyNewTab(tab) {
 
   const windowId = tab.windowId;
   const now = Date.now();
-  const burst = noteRecentCreation(windowId);
-  if (burst >= 2) {
-    burstSuppressUntil.set(windowId, now + CREATED_BURST_SUPPRESS_MS);
+  // Bursts (session restore, "reopen closed window", bulk opens) carry real
+  // URLs. A blank tab is a deliberate Ctrl+T / "+", so it never counts toward
+  // a burst: pressing Ctrl+T twice quickly must not demote both tabs to the
+  // default group. It still yields to a burst that is already in progress.
+  const createdUrl = tab.pendingUrl || tab.url || "";
+  const createdBlank = createdUrl === "" || isNewTabUrl(createdUrl);
+  if (!createdBlank) {
+    const burst = noteRecentCreation(windowId);
+    if (burst >= 2) {
+      burstSuppressUntil.set(windowId, now + CREATED_BURST_SUPPRESS_MS);
+      return;
+    }
+  } else if (recentCreationCount(windowId) >= 2) {
     return;
   }
   if ((burstSuppressUntil.get(windowId) ?? 0) > now) return;
@@ -907,7 +1050,10 @@ async function classifyNewTab(tab) {
     chrome.tabs.query({ windowId }),
     chrome.tabGroups.query({ windowId }),
   ]);
-  if (fresh.groupId !== TAB_GROUP_ID_NONE) return;
+  // Re-check against the fresh query: Chrome may have grouped (or the user
+  // pinned/closed) the tab while we were waiting, and it must not be stolen.
+  const latest = tabs.find((entry) => entry.id === fresh.id);
+  if (!latest || latest.pinned || latest.groupId !== TAB_GROUP_ID_NONE) return;
   const activeTab = tabs.find((entry) => entry.active) ?? null;
   const target = planNewTabTarget({
     tabs,
@@ -1227,7 +1373,14 @@ async function handleGroupUpdated(group) {
   rememberCollapsed(group);
   if (!ready || !currentSettings.enabled) return;
 
-  if (previous === false && group.collapsed === true && Date.now() >= warmupUntil) {
+  // The expanded-header actions are part of the single-expanded model. With it
+  // off several groups are open at once and collapsing one is just a collapse.
+  if (
+    currentSettings.singleExpanded &&
+    previous === false &&
+    group.collapsed === true &&
+    Date.now() >= warmupUntil
+  ) {
     const action = currentSettings.expandedGroupHeaderClick;
     const until = Date.now() + HEADER_ACTION_TTL_MS;
     headerActionUntil.set(group.windowId, until);
@@ -1284,6 +1437,7 @@ async function handleGroupUpdated(group) {
 // ------------------------------------------------------------- event wiring
 
 chrome.tabs.onCreated.addListener((tab) => {
+  // Creation time must be the event time, not when a revived worker gets to it.
   if (tab?.id != null) {
     const url = tab.pendingUrl || tab.url || "";
     const now = Date.now();
@@ -1297,16 +1451,18 @@ chrome.tabs.onCreated.addListener((tab) => {
       if (now - entry.createdAt > 5000) recentTabCreations.delete(createdId);
     }
   }
-  void handleCreated(tab)
-    .catch((err) => console.warn("[gtm] onCreated failed", errorText(err)))
-    .finally(() => {
-      refreshPinnedSnapshots();
-      schedule(tab?.windowId);
-    });
+  onReady(() => {
+    void handleCreated(tab)
+      .catch((err) => console.warn("[gtm] onCreated failed", errorText(err)))
+      .finally(() => {
+        refreshPinnedSnapshots();
+        schedule(tab?.windowId);
+      });
+  });
 });
 
 chrome.tabs.onActivated.addListener((info) => {
-  schedule(info.windowId);
+  onReady(() => schedule(info.windowId));
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -1314,113 +1470,131 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const pinnedChanged = Object.hasOwn(changeInfo, "pinned");
   if (!groupChanged && !pinnedChanged) return;
 
-  if (groupChanged) {
-    const check = pendingCreatedChecks.get(tabId);
-    if (check) check.cancelled = true;
-    syncSnapshotMembership(tabId, changeInfo.groupId);
-  }
-  if (pinnedChanged) {
-    // Pinning always leaves a group, and unpinning yields an ungrouped tab:
-    // drop transient protection claims so normalization assigns it afresh
-    // (the default-group pass picks it up).
-    releasePendingPinned(tabId);
-    removeTabFromSnapshots(tabId);
-  }
-  refreshPinnedSnapshots();
-  schedule(tab?.windowId);
+  onReady(() => {
+    if (groupChanged) {
+      const check = pendingCreatedChecks.get(tabId);
+      if (check) check.cancelled = true;
+      syncSnapshotMembership(tabId, changeInfo.groupId);
+    }
+    if (pinnedChanged) {
+      // Pinning always leaves a group, and unpinning yields an ungrouped tab:
+      // drop transient protection claims so normalization assigns it afresh
+      // (the default-group pass picks it up).
+      releasePendingPinned(tabId);
+      removeTabFromSnapshots(tabId);
+    }
+    refreshPinnedSnapshots();
+    schedule(tab?.windowId);
+  });
 });
 
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   if (removeInfo?.isWindowClosing) {
     closingWindows.set(removeInfo.windowId, Date.now() + CLOSING_WINDOW_TTL_MS);
   }
-  for (const snapshot of pinnedSnapshots.values()) {
-    const at = snapshot.tabIds.indexOf(tabId);
-    if (at !== -1) snapshot.tabIds.splice(at, 1);
-  }
-  releasePendingPinned(tabId);
-  releasePendingCreated(tabId);
-  recentTabCreations.delete(tabId);
-  pendingCreatedChecks.delete(tabId);
-  ignoreCreatedTabs.delete(tabId);
-  refreshPinnedSnapshots();
-  schedule(removeInfo?.windowId);
+  onReady(() => {
+    removeTabFromSnapshots(tabId);
+    releasePendingPinned(tabId);
+    releasePendingCreated(tabId);
+    recentTabCreations.delete(tabId);
+    pendingCreatedChecks.delete(tabId);
+    ignoreCreatedTabs.delete(tabId);
+    refreshPinnedSnapshots();
+    schedule(removeInfo?.windowId);
+  });
 });
 
 chrome.tabs.onMoved.addListener((tabId, moveInfo) => {
   lastTabMoveAt = Date.now();
-  refreshPinnedSnapshots();
-  schedule(moveInfo?.windowId);
+  onReady(() => {
+    refreshPinnedSnapshots();
+    schedule(moveInfo?.windowId);
+  });
 });
 
 chrome.tabs.onAttached.addListener((tabId, attachInfo) => {
   lastTabMoveAt = Date.now();
-  refreshPinnedSnapshots();
-  schedule(attachInfo?.newWindowId);
+  onReady(() => {
+    refreshPinnedSnapshots();
+    schedule(attachInfo?.newWindowId);
+  });
 });
 
 chrome.tabs.onDetached.addListener((tabId, detachInfo) => {
   lastTabMoveAt = Date.now();
-  refreshPinnedSnapshots();
-  schedule(detachInfo?.oldWindowId);
+  onReady(() => {
+    refreshPinnedSnapshots();
+    schedule(detachInfo?.oldWindowId);
+  });
 });
 
 chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
   lastTabMoveAt = Date.now();
-  releasePendingPinned(removedTabId);
-  pendingCreatedChecks.delete(removedTabId);
-  refreshPinnedSnapshots();
-  void chrome.tabs
-    .get(addedTabId)
-    .then((tab) => schedule(tab.windowId))
-    .catch(() => {});
+  onReady(() => {
+    releasePendingPinned(removedTabId);
+    pendingCreatedChecks.delete(removedTabId);
+    refreshPinnedSnapshots();
+    void chrome.tabs
+      .get(addedTabId)
+      .then((tab) => schedule(tab.windowId))
+      .catch(() => {});
+  });
 });
 
 chrome.tabGroups.onCreated.addListener((group) => {
-  rememberCollapsed(group);
-  recentGroupCreations.set(group.id, {
-    title: group.title,
-    color: group.color,
-    windowId: group.windowId,
-    at: Date.now(),
+  const at = Date.now();
+  onReady(() => {
+    rememberCollapsed(group);
+    recentGroupCreations.set(group.id, {
+      title: group.title,
+      color: group.color,
+      windowId: group.windowId,
+      at,
+    });
+    refreshPinnedSnapshots();
+    schedule(group.windowId);
   });
-  refreshPinnedSnapshots();
-  schedule(group.windowId);
 });
 
 chrome.tabGroups.onUpdated.addListener((group) => {
-  void handleGroupUpdated(group).catch((err) =>
-    console.warn("[gtm] onUpdated failed", errorText(err)),
-  );
+  onReady(() => {
+    void handleGroupUpdated(group).catch((err) =>
+      console.warn("[gtm] onUpdated failed", errorText(err)),
+    );
+  });
 });
 
 chrome.tabGroups.onMoved.addListener((group) => {
-  refreshPinnedSnapshots();
-  schedule(group.windowId);
+  onReady(() => {
+    refreshPinnedSnapshots();
+    schedule(group.windowId);
+  });
 });
 
 chrome.tabGroups.onRemoved.addListener((group) => {
-  handleGroupRemoved(group);
+  onReady(() => handleGroupRemoved(group));
 });
 
 chrome.windows.onCreated.addListener((win) => {
-  schedule(win.id);
+  onReady(() => schedule(win.id));
 });
 
 chrome.windows.onRemoved.addListener((windowId) => {
-  lastActiveGroupByWindow.delete(windowId);
-  defaultGroupByWindow.delete(windowId);
-  retryCounts.delete(windowId);
-  closingWindows.delete(windowId);
-  recentCreations.delete(windowId);
-  burstSuppressUntil.delete(windowId);
-  headerActionUntil.delete(windowId);
-  clearTimeout(scheduleTimers.get(windowId));
-  scheduleTimers.delete(windowId);
-  windowChains.delete(windowId);
-  for (const [groupId, snapshot] of [...pinnedSnapshots]) {
-    if (snapshot.windowId === windowId) pinnedSnapshots.delete(groupId);
-  }
+  onReady(() => {
+    lastActiveGroupByWindow.delete(windowId);
+    defaultGroupByWindow.delete(windowId);
+    retryCounts.delete(windowId);
+    closingWindows.delete(windowId);
+    recentCreations.delete(windowId);
+    burstSuppressUntil.delete(windowId);
+    headerActionUntil.delete(windowId);
+    clearTimeout(scheduleTimers.get(windowId));
+    scheduleTimers.delete(windowId);
+    windowChains.delete(windowId);
+    for (const [groupId, snapshot] of [...pinnedSnapshots]) {
+      if (snapshot.windowId === windowId) pinnedSnapshots.delete(groupId);
+    }
+  });
 });
 
 function removeTabFromSnapshots(tabId) {
@@ -1497,18 +1671,59 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 async function applySettingsPatch(patch) {
   const oldSettings = currentSettings;
-  const preview = normalizeSettings({ ...oldSettings, ...patch });
+  const nextPatch = { ...patch };
+  let preview = normalizeSettings({ ...oldSettings, ...nextPatch });
   const presentationChanged =
     preview.defaultGroupTitle !== oldSettings.defaultGroupTitle ||
     preview.defaultGroupColor !== oldSettings.defaultGroupColor;
-  if (preview.enabled && presentationChanged) {
+
+  if (presentationChanged) {
+    if (preview.defaultGroupTitle !== oldSettings.defaultGroupTitle) {
+      await assertDefaultTitleIsFree(oldSettings, preview.defaultGroupTitle);
+    }
+    // Pinning is keyed by title + color. A pinned default group keeps its pin
+    // (and its position) across the rename instead of silently losing it.
+    const oldKey = pinnedKey(oldSettings.defaultGroupTitle, oldSettings.defaultGroupColor);
+    if (preview.pinnedGroups.some((entry) => pinnedKey(entry.title, entry.color) === oldKey)) {
+      nextPatch.pinnedGroups = preview.pinnedGroups.map((entry) =>
+        pinnedKey(entry.title, entry.color) === oldKey
+          ? { title: preview.defaultGroupTitle, color: preview.defaultGroupColor }
+          : entry,
+      );
+      preview = normalizeSettings({ ...oldSettings, ...nextPatch });
+    }
+    // Renaming is a direct consequence of the user editing the default group,
+    // so it also happens while the extension is paused; otherwise re-enabling
+    // would leave the old group behind and create a second default group.
     await renameDefaultGroups(oldSettings, preview);
   }
-  const { newSettings } = await saveSettings(patch);
+  const { newSettings } = await saveSettings(nextPatch);
   currentSettings = newSettings;
   refreshPinnedSnapshots();
   await normalizeAllWindows();
   return newSettings;
+}
+
+/**
+ * Taking the title of an existing user group would make the duplicate-default
+ * merge fold that group's tabs into the default group. Refuse instead.
+ */
+async function assertDefaultTitleIsFree(oldSettings, title) {
+  let groups = [];
+  try {
+    groups = await chrome.tabGroups.query({});
+  } catch {
+    return;
+  }
+  const clash = groups.some(
+    (group) =>
+      group.title === title &&
+      group.title !== oldSettings.defaultGroupTitle &&
+      group.id !== defaultGroupByWindow.get(group.windowId),
+  );
+  if (clash) {
+    throw new Error(`已有名为“${title}”的分组，请换一个默认分组标题`);
+  }
 }
 
 async function renameDefaultGroups(oldSettings, newSettings) {
@@ -1526,10 +1741,13 @@ async function renameDefaultGroups(oldSettings, newSettings) {
     } catch {
       continue;
     }
+    // Same rule as findDefaultGroup: a remembered group the user renamed is
+    // theirs and must not be renamed back.
+    const rememberedId = defaultGroupByWindow.get(win.id);
     const targets = groups.filter(
       (group) =>
         group.title === oldSettings.defaultGroupTitle ||
-        group.id === defaultGroupByWindow.get(win.id),
+        (group.id === rememberedId && !group.title),
     );
     for (const target of targets) {
       try {
@@ -1569,13 +1787,44 @@ function installBootBumpers() {
   };
 }
 
+/**
+ * Load settings plus whatever a previous incarnation of this worker left in
+ * chrome.storage.session. Returns whether this is a wake-up inside a running
+ * browser session (bootReady set) rather than a cold browser start.
+ */
+async function restoreState() {
+  currentSettings = await loadSettings();
+  const stored = await chrome.storage.session.get([
+    "bootReady",
+    "pinnedSnapshots",
+    RUNTIME_STATE_KEY,
+  ]);
+  if (!stored?.bootReady) return false;
+
+  const runtime = stored[RUNTIME_STATE_KEY] ?? {};
+  collapsedStates.load(runtime.collapsed);
+  lastActiveGroupByWindow.load(runtime.lastActive);
+  defaultGroupByWindow.load(runtime.defaultGroups);
+  // Snapshots let a revived worker protect a pinned group whose removal is the
+  // very event that woke it. Live groups replace them right after boot.
+  for (const [key, snapshot] of Object.entries(stored.pinnedSnapshots ?? {})) {
+    const groupId = Number(key);
+    if (!Number.isFinite(groupId) || pinnedSnapshots.has(groupId)) continue;
+    if (!snapshot || !Array.isArray(snapshot.tabIds)) continue;
+    pinnedSnapshots.set(groupId, { ...snapshot, tabIds: snapshot.tabIds.slice() });
+  }
+  return true;
+}
+
 async function boot() {
   if (bootPromise) return bootPromise;
   bootPromise = (async () => {
-    currentSettings = await loadSettings();
-    const { bootReady } = await chrome.storage.session.get("bootReady");
+    const wakeUp = await restoreState();
 
-    if (!bootReady) {
+    if (!wakeUp) {
+      // Cold start: stay read-only while Chrome restores the session.
+      dropDeferredEvents = true;
+      deferredEvents.length = 0;
       const bumpers = installBootBumpers();
       const startedAt = Date.now();
       try {
@@ -1593,6 +1842,10 @@ async function boot() {
     }
 
     ready = true;
+    dropDeferredEvents = false;
+    // Replay the events that woke the worker against the restored state before
+    // the live refresh below overwrites snapshots and collapsed states.
+    drainDeferredEvents();
     await doRefreshPinnedSnapshots();
     await seedCollapsedStates();
     void normalizeAllWindows();

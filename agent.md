@@ -24,7 +24,8 @@
 | `src/lib/settings.js` | 默认值、标题/颜色/钉住列表校验、`loadSettings` / `saveSettings` |
 | `src/options.*` | 分组式设置卡片、默认分组、钉住列表、快捷键展示与跳转 |
 | `src/popup.*` | 分组数、当前分组、总开关、“立即整理”、“设置” |
-| `test/*.test.js` | 纯逻辑回归测试 + `background.test.js`（fake chrome，覆盖真实事件接线） |
+| `test/*.test.js` | 纯逻辑回归测试 + 后台事件接线测试（fake chrome）。每个后台测试文件在独立进程里加载一次 `background.js`；需要全新 worker 的场景（如 `wake-*.test.js` 的唤醒路径）各占一个文件 |
+| `test/fake-chrome.js` | 共享的 fake `chrome`：`installFakeChrome({ groups, tabs, settings, session, storageDelayMs })`，`failures.group/update` 注入一次性 API 失败，`closeTab` / `removeGroup` 模拟 Chrome 删除顺序 |
 | `.github/workflows/release.yml` | tag 发布：测试、校验清单版本、打包 zip、上传 GitHub Release |
 | `CHANGELOG.md` | 用户可见变更记录，版本号与 `manifest.json` 同步 |
 
@@ -60,8 +61,9 @@ flowchart LR
 - 外部程序新标签页在 Chrome 157 带有 `openerTabId`（指向当时活动页），不能按链接标签页跳过；仍由 `externalNewTabInActiveGroup` 决定。
 - `tabs.onUpdated` 必须同时处理 `groupId` 和 `pinned`：固定标签页不属于分组，取消固定后 groupId 仍是 -1，只有 `pinned` 变化事件可用；不调度归一化就会一直留在未分组状态。
 - Chrome 在“收起活动分组且无其他可切换标签页（无固定标签页、无其他展开分组）”时会新建一个空白页（`BrowserTabStripController::ToggleTabGroupCollapsedState`）。有固定标签页时 Chrome 会先激活一个固定标签页；两种情况都发生在扩展收到事件之前，扩展只能事后接管。识别条件见 `findCollapseReplacement`：300ms 内创建、空/NTP URL、活动、未固定、opener 在分组内（不检查当前分组，快速路径可能已把它归组）。`newtab` 直接接管这个占位页；`collapse` / `noaction` 先激活目标标签页再删除它，避免删除活动页产生中间页面切换。
-- 内存态（`lastActiveGroupByWindow`、`defaultGroupByWindow`、`collapsedStates`）在 worker 重启后为空；归一化必须能靠标题、`lastAccessed` 和实时查询恢复，不能依赖这些 Map 一定存在。
-- 固定分组快照在启动/worker 重启后从实时分组重建；不要信任持久化里可能被复用的 group ID。
+- `lastActiveGroupByWindow`、`defaultGroupByWindow`、`collapsedStates` 是 `PersistedMap`：每次 set/delete 后 20ms 合并写入 `chrome.storage.session.runtimeState`，worker 被唤醒时由 `restoreState()` 读回。`storage.session` 在浏览器重启和扩展重载时清空，所以里面的 group ID 只属于当前会话，不会被复用。归一化仍须能在这些 Map 为空时靠标题、`lastAccessed` 和实时查询工作（冷启动就是这种情况）。
+- worker 唤醒（`bootReady` 已存在）时也读回 `pinnedSnapshots`，以便保护“唤醒 worker 的那次删除”；boot 随后用实时分组覆盖快照。冷启动不读取。
+- **唤醒事件不能丢**：MV3 worker 空闲约 30 秒被终止，下一个事件在 `boot()` 完成前就派发。所有 Chrome 事件监听器都通过 `onReady(run)` 包装：已就绪立即执行；未就绪则排队，boot 在 `ready = true` 之后、`doRefreshPinnedSnapshots`/`seedCollapsedStates` 之前按顺序回放。冷启动静默门期间（`dropDeferredEvents`）排队的事件直接丢弃，保持只读。必须以事件发生时刻为准的字段（`recentTabCreations.createdAt`、`closingWindows`、`lastTabMoveAt`、`recentGroupCreations.at`）在包装外同步记录。
 
 ## 启动与恢复门
 
@@ -76,7 +78,7 @@ flowchart LR
 
 1. 已就绪、启用、非固定、普通窗口、未被 `ignoreCreatedTabs` 标记。
 2. 立即 `claimPendingCreated(tab.id)`，把新标签页从默认分组扫描中排除，直到分类结束。否则 `tabs.onActivated` 触发的 60ms 归一化会抢在 150ms 分类之前把新标签页塞进默认分组——这是实际出现过的 bug。
-3. 按窗口统计 300ms 内的创建数量；2 个以上视为会话恢复/批量打开，设置 2s 抑制并跳过。
+3. 按窗口统计 300ms 内**非空白 URL** 的创建数量；2 个以上视为会话恢复/批量打开，设置 2s 抑制并跳过。空白/NTP 标签页（Ctrl+T、`+`）不计入突发，快速连按两次 Ctrl+T 两个都进入展开分组；但已有突发或抑制时空白页同样让路。
 4. `pendingCreatedChecks` 登记取消标志；等待 150ms；再次检查突发数量和 `ignoreCreatedTabs`；重读标签页。
 5. 分类顺序：自身扩展页 → 空 URL 或 NTP URL（总是移动）→ 外部标签页（看 `externalNewTabInActiveGroup`）。不要因为 `openerTabId` 非空就跳过：Chrome 157 的外部启动标签页也会带上当时的活动标签页作为 opener；链接标签页和“在新标签页组中打开”此时已经被 Chrome 归组（`groupId !== -1`），会提前返回。
 6. 目标分组来自 `planNewTabTarget`；没有目标时查找或创建默认分组（先按 remembered ID，再按标题），不要重复创建同名默认分组。
@@ -93,7 +95,7 @@ flowchart LR
 
 关键事实：Chrome 没有 `tabGroups.close`，`tabGroups.onRemoved` 不可取消，已保存标签组对扩展不可见。保护=保持非空。
 
-- `pinnedSnapshots: Map<groupId, {windowId,title,color,collapsed,tabIds,updatedAt}>`，100ms 防抖刷新；同时持久化到 `chrome.storage.session.pinnedSnapshots`（不读取，重启靠实时重建）。
+- `pinnedSnapshots: Map<groupId, {windowId,title,color,collapsed,tabIds,updatedAt}>`，100ms 防抖刷新；同时持久化到 `chrome.storage.session.pinnedSnapshots`，仅在 worker 唤醒时读回（见上文“运行时结构”）。
 - `pendingPinnedTabs: Map<tabId, {expiresAt, origin}>`：刚从钉住分组离开的标签页不参与默认分组；`origin` 用于快照刷新时保留归属，5s TTL 防泄漏。
 - `tabs.onRemoved` 先从快照同步删除 ID，再刷新；这样最后一个标签页关闭时快照为空，才能触发空白页。
 - `tabs.onUpdated` 的 `groupId` 变化：从旧快照删除；新分组是钉住分组则加入；变为 `-1` 且有 origin 才 `claimPendingPinned`。
@@ -103,14 +105,16 @@ flowchart LR
 - 恢复决策用纯函数 `choosePinnedRestore`：窗口关闭或已移动到其他窗口 → `skip`；同窗口存活的未分组标签页 → `regroup`；否则 → `blank`。不要抢其他分组里的存活标签页。
 - `restoreLocks` 按 `${windowId}:${groupId}` 防重入；`closingWindows` 5s TTL；`recentGroupCreations` 2s 内识别“移动到新窗口”。
 - 拖拽/不可编辑错误：整个恢复最多重试一次（300ms）；重试期间必须保留 pending 声明，否则归一化会把标签页扫进默认分组。所有清理放在 `finally`。
-- 空白页创建：`chrome://newtab/`，失败回退 `about:blank`；必须未激活。创建后同时标记 `ignoreCreatedTabs` 和 pending，再归组。
+- 空白页创建：`chrome://newtab/`，失败回退 `about:blank`；必须未激活。创建后同时标记 `ignoreCreatedTabs` 和 `claimPendingPinned`，再归组。空白页 ID 通过 `state.blankTabId` 在重试间共享：重试复用第一次的空白页，不能再建一个；重试也失败时关闭这个未归组的空白页，不让它漏进默认分组。
 - 身份是**标题 + 颜色**：标题精确、区分大小写，颜色必须在九色枚举内且一致；同标题同色分组全部钉住。重命名或改色即失去钉住；无标题分组不可钉住。选项页、`planGroupOrder`、快照筛选、移动识别和恢复判定都必须用同一个二元组，不能只比标题。
 - 重建前要判断该分组是否原本展开：Chrome 可能在移除前先把它折叠，因此用 `pinnedSnapshots` 中最后一次刷新到的 `collapsed`（`snapshot.wasExpanded`），不要只看 `tabGroups.onRemoved` 的 `group.collapsed`。原本展开且标题不是默认组时，重建后调用 `focusDefaultGroup` 激活默认组 MRU 标签页并折叠重建组，避免其他钉住分组抢占展开位。
 
 ## 设置与 UI
 
 - 单一存储键：`chrome.storage.sync.settings`。`normalizeSettings` 合并默认值、裁剪标题到 30 字符、校验九种颜色、钉住列表按标题+颜色去重、上限 50。
-- 后台 `save-settings` 在写存储前重命名各窗口的默认分组（旧标题的全部同标题分组 + remembered ID），避免设置切换后旧标题分组被当成普通分组或留下重复项。
+- 后台 `save-settings` 在写存储前重命名各窗口的默认分组（旧标题的全部同标题分组 + 仍未命名的 remembered ID），避免设置切换后旧标题分组被当成普通分组或留下重复项。重命名不受总开关影响；默认分组被钉住时同步改写 `pinnedGroups` 中的对应项；新标题与已打开的其他分组同名时拒绝保存（`assertDefaultTitleIsFree`），否则重复默认分组合并会吞掉那个分组。
+- `findDefaultGroup` 只在 remembered 分组标题仍等于默认标题（或尚未命名，即刚创建、标题更新未落地）时采用它；用户在 Chrome 中改了名的分组不再是默认分组。
+- `updateCollapsed` / `updateGroupPresentation` 先写 `collapsedStates` 再调用 API，以便识别自己触发的 `onUpdated`；调用失败时必须回滚，否则下一次真实的标题点击会被误判。
 - 选项页保存后立即 `refresh`，`chrome.storage.onChanged` 也会刷新；不要把设置写进本地副本。
 - 选项页钉住列表顺序即标签栏顺序；上/下移动、取消钉住都发送完整 `pinnedGroups` 数组。“取消钉住”不会关闭 Chrome 分组。
 - 弹窗只做只读统计 + 总开关 + 两个按钮；不要在弹窗复制完整设置。
@@ -141,7 +145,8 @@ flowchart LR
 - 默认组按 `defaultGroupTitle` 精确匹配；多个同名默认组取标签栏顺序中的第一个（选择逻辑只用于 `collapse`）。
 - `collapse` 只在默认组有标签页时生效；空组不存在，因此“有默认组”即“默认组有标签页”。
 - `newtab` 复用 Chrome 的占位页，没有占位页时才新建组内 NTP；`collapse` / `noaction` 在切换焦点后关闭占位页。
-- `keepLastWhenPinned` 只影响普通激活固定标签页，不影响上述三种点击行为。
+- `keepLastWhenPinned` 只影响普通激活固定标签页，不影响上述三种点击行为。活动标签页未分组且**未固定**（典型是正在分类的 Ctrl+T 新标签页）时，`fallbackGroupId` 一律使用 remembered 分组；keepLast 关闭时只是不再猜 MRU。
+- 三种点击行为只在 `singleExpanded` 开启时触发；关闭时多个分组可同时展开，折叠任意分组都是普通折叠。
 - `expandHeaderClick` 只影响点击**折叠**分组标题，不影响已展开分组。
 
 标题点击期间的闪烁防护：
