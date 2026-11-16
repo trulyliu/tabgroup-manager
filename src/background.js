@@ -1038,6 +1038,26 @@ async function focusDefaultGroup(windowId, excludeGroupId = null) {
   return true;
 }
 
+/** Keyboard shortcut: focus the default group in the last focused window. */
+async function switchToDefaultGroup() {
+  if (!ready || !currentSettings.enabled) return;
+  let active = null;
+  try {
+    active = (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0] ?? null;
+  } catch {
+    return;
+  }
+  if (!active) return;
+  let win = null;
+  try {
+    win = await chrome.windows.get(active.windowId);
+  } catch {
+    return;
+  }
+  if (!isNormalWindowType(win)) return;
+  await focusDefaultGroup(active.windowId);
+}
+
 async function headerCollapseToDefault(group) {
   const context = await captureCollapse(group);
   if (!context) return;
@@ -1338,6 +1358,18 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   currentSettings = normalizeSettings(changes.settings.newValue);
   refreshPinnedSnapshots();
   void normalizeAllWindows();
+});
+
+chrome.commands.onCommand.addListener((command) => {
+  if (command !== "switch-to-default-group") return;
+  void (async () => {
+    try {
+      await boot();
+      await switchToDefaultGroup();
+    } catch (err) {
+      console.warn("[gtm] shortcut failed", errorText(err));
+    }
+  })();
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

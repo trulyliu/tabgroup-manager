@@ -39,6 +39,9 @@ const els = {
   pinButton: document.getElementById("pinButton"),
   normalizeButton: document.getElementById("normalizeButton"),
   status: document.getElementById("status"),
+  version: document.getElementById("version"),
+  defaultGroupShortcut: document.getElementById("defaultGroupShortcut"),
+  changeShortcutButton: document.getElementById("changeShortcutButton"),
 };
 
 let currentSettings = null;
@@ -201,11 +204,23 @@ async function renderPinned(settings) {
   };
 }
 
+async function renderShortcut() {
+  try {
+    const commands = await chrome.commands.getAll();
+    const command = commands.find((entry) => entry.name === "switch-to-default-group");
+    els.defaultGroupShortcut.textContent = command?.shortcut || "未设置";
+  } catch (err) {
+    els.defaultGroupShortcut.textContent = "不可用";
+    setStatus(String(err?.message ?? err), true);
+  }
+}
+
 async function refresh() {
   const settings = await loadSettings();
   currentSettings = settings;
   renderForm(settings);
   await renderPinned(settings);
+  await renderShortcut();
 }
 
 buildColorOptions();
@@ -224,6 +239,12 @@ els.defaultGroupColor.addEventListener("change", () => {
   void savePatch({ defaultGroupColor: els.defaultGroupColor.value });
 });
 
+els.changeShortcutButton.addEventListener("click", () => {
+  void chrome.tabs.create({ url: "chrome://extensions/shortcuts" }).catch((err) => {
+    setStatus("请手动打开 chrome://extensions/shortcuts", true);
+    console.warn("[gtm] open shortcuts failed", err);
+  });
+});
 els.normalizeButton.addEventListener("click", async () => {
   els.normalizeButton.disabled = true;
   try {
@@ -244,4 +265,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   void refresh();
 });
 
+window.addEventListener("focus", () => {
+  void renderShortcut();
+});
+
+els.version.textContent = `v${chrome.runtime.getManifest().version}`;
 void refresh().catch((err) => setStatus(String(err?.message ?? err), true));

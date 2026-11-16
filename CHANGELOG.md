@@ -4,6 +4,16 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.3.0] - 2026-11-16
+
+### Added
+
+- `Alt+W` 快捷键切换到默认分组，并在选项页展示当前按键、提供跳转到 Chrome 快捷键设置的入口。
+
+### Changed
+
+- 重新设计选项页：设置按布局、标题点击、新标签页、默认分组、快捷键和钉住分组分组展示，支持浅色/深色与窄屏布局。
+
 ## [0.2.1] - 2026-11-16
 
 ### Changed

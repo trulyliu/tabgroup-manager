@@ -16,13 +16,13 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `manifest.json` | 权限、service worker module、选项页、弹窗、图标 |
+| `manifest.json` | 权限、service worker module、选项页、弹窗、图标、`switch-to-default-group` 快捷键 |
 | `icons/icon.svg` + PNG | 扩展图标源文件，改图后重新导出 16/32/48/128 |
 | `src/background.js` | 事件接线、逐窗口串行归一化、启动门、固定分组保护、设置写入 |
 | `src/lib/layout.js` | `planGroupOrder`、`planCollapse`、`planNewTabTarget`、默认分组查找、NTP URL 判定 |
 | `src/lib/pinned.js` | `isPinnedGroup`（标题+颜色）、`choosePinnedRestore`（`skip` / `regroup` / `blank`） |
 | `src/lib/settings.js` | 默认值、标题/颜色/钉住列表校验、`loadSettings` / `saveSettings` |
-| `src/options.*` | 行为开关、默认分组、钉住列表增删排序、“立即整理” |
+| `src/options.*` | 分组式设置卡片、默认分组、钉住列表、快捷键展示与跳转 |
 | `src/popup.*` | 分组数、当前分组、总开关、“立即整理”、“设置” |
 | `test/*.test.js` | 纯逻辑回归测试 + `background.test.js`（fake chrome，覆盖真实事件接线） |
 | `.github/workflows/release.yml` | tag 发布：测试、校验清单版本、打包 zip、上传 GitHub Release |
@@ -114,6 +114,12 @@ flowchart LR
 - 弹窗只做只读统计 + 总开关 + 两个按钮；不要在弹窗复制完整设置。
 - `chrome.runtime.sendMessage` 从 service worker 发给自己不会触发自身的 `onMessage`；需要内部触发时用 `chrome.storage` 变更或从扩展页面发送。
 
+## 快捷键
+
+- `manifest.json` 声明 `switch-to-default-group`，建议键 `Alt+W`；不需要额外权限。
+- `chrome.commands.onCommand` 先 `await boot()`，再调用 `switchToDefaultGroup`：取最近聚焦的普通窗口，交给 `focusDefaultGroup` 激活默认分组 MRU；扩展停用或没有默认分组时静默返回。
+- 快捷键由 Chrome 存储，不在 `chrome.storage.sync.settings` 里。选项页只用 `chrome.commands.getAll()` 展示当前按键；“更改”打开 `chrome://extensions/shortcuts`。
+- 没有 `chrome.commands.update` 一类的 API，**不要**在选项页做假的快捷键输入框，也不要用内容脚本自行监听按键。
 
 ## 点击已展开分组标题：行为矩阵
 
@@ -157,6 +163,7 @@ npm test
 7. 取消钉住后删除 → 不再重建；Chrome 中重命名或改色 → 失去钉住。准备两个同标题不同颜色的分组（如红色 `Default` 与保存恢复的蓝色 `Default`）：只钉住红色时，删除/取消分组/关闭蓝色组都不应重建它，红色仍受保护。
 8. 开启“继续浏览上次打开的网页”后重启 → 分组/标题/颜色/顺序/单展开全部保持。
 9. 关闭总开关 → 激活、创建、取消分组都不被改写，固定分组保护停止；重新开启后收敛。
+10. 在选项页确认快捷键显示 `Alt+W`；从非默认分组按 `Alt+W` → 默认分组展开并激活 MRU。到 `chrome://extensions/shortcuts` 改键后回到选项页，显示应刷新；关闭总开关后快捷键不应改写标签页。
 
 检查扩展页 `chrome://extensions` 无 runtime error；不要把 URL 加进日志来“调试分类”。
 

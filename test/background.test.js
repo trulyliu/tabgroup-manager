@@ -140,6 +140,12 @@ const chrome = {
     onInstalled: makeEvent(),
     onMessage: makeEvent(),
   },
+  commands: {
+    onCommand: makeEvent(),
+    async getAll() {
+      return [{ name: "switch-to-default-group", shortcut: "Alt+W" }];
+    },
+  },
   storage: {
     sync: {
       async get(key) {
@@ -665,4 +671,29 @@ test("newtab action reuses Chrome's throwaway tab instead of recreating it", asy
   assert.equal(findTab(999).active, true);
   assert.equal(findGroup(alpha.id).collapsed, false);
   assert.equal(tabs.length, before + 1);
+});
+
+test("switch-to-default-group command focuses the default group MRU", async () => {
+  await chrome.storage.sync.set({
+    settings: { ...settings, enabled: true, defaultGroup: true },
+  });
+  await sleep(300);
+
+  const alpha = groups.find((entry) => entry.title === "Alpha");
+  const defaultGroup = groups.find((entry) => entry.title === "其他");
+  const alphaTab = tabs.find((entry) => entry.groupId === alpha.id);
+  assert.ok(alphaTab, "Alpha group should not be empty");
+
+  for (const entry of tabs) entry.active = false;
+  alphaTab.active = true;
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: alphaTab.id });
+  await sleep(300);
+  assert.equal(tabs.find((entry) => entry.active)?.groupId, alpha.id);
+
+  chrome.commands.onCommand.fire("switch-to-default-group");
+  await sleep(300);
+
+  assert.equal(tabs.find((entry) => entry.active)?.groupId, defaultGroup.id);
+  assert.equal(findGroup(alpha.id).collapsed, true);
+  assert.equal(findGroup(defaultGroup.id).collapsed, false);
 });

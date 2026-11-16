@@ -9,91 +9,207 @@
   </head>
   <body>
     <main>
-      <h1>标签组管理器</h1>
-      <p class="hint">以下规则按窗口生效：分组标签页在前、只展开一个分组、新标签进入展开的分组。</p>
-
-      <section>
-        <h2>总开关</h2>
-        <label class="row">
-          <input type="checkbox" id="enabled" />
-          <span>启用扩展</span>
-        </label>
-      </section>
-
-      <section>
-        <h2>行为</h2>
-        <label class="row">
-          <input type="checkbox" id="groupsFirst" />
-          <span>分组标签页排在最前</span>
-        </label>
-        <label class="row">
-          <input type="checkbox" id="defaultGroup" />
-          <span>未分组标签页放入默认分组</span>
-        </label>
-        <label class="row">
-          <input type="checkbox" id="singleExpanded" />
-          <span>同时只展开一个分组</span>
-        </label>
-        <label class="row">
-          <input type="checkbox" id="keepLastWhenPinned" />
-          <span>激活固定标签页时保留上次展开的分组</span>
-        </label>
-        <label class="row">
-          <input type="checkbox" id="externalNewTabInActiveGroup" />
-          <span>外部程序打开的新标签页进入当前展开的分组</span>
-        </label>
-        <label class="row">
-          <input type="checkbox" id="expandHeaderClick" />
-          <span>点击分组标题展开时切换到该分组最近的标签页</span>
-        </label>
-        <label class="row">
-          <span>点击已展开的分组标题</span>
-          <select id="expandedGroupHeaderClick">
-            <option value="newtab">在分组内新建一个标签页</option>
-            <option value="collapse">折叠非默认分组并展开默认分组</option>
-            <option value="noaction">不改变当前分组</option>
-          </select>
-        </label>
-        <p class="hint">
-          三种行为都不受固定标签页影响。选择“折叠”时，点击默认分组不会改变；没有默认分组时保持当前分组。
-          “新建标签页”会关闭 Chrome 为切换焦点临时创建的空白页。
-        </p>
-      </section>
-
-      <section>
-        <h2>默认分组</h2>
-        <label class="row">
-          <span>名称</span>
-          <input type="text" id="defaultGroupTitle" maxlength="30" />
-        </label>
-        <label class="row">
-          <span>颜色</span>
-          <select id="defaultGroupColor"></select>
-        </label>
-      </section>
-
-      <section>
-        <h2>钉住的分组</h2>
-        <p class="hint">按标题和颜色识别；同标题同色的分组会一起钉住。列表顺序即标签栏顺序。</p>
-        <ul id="pinnedList" class="pin-list"></ul>
-        <p id="emptyPinned" class="hint">还没有钉住的分组。</p>
-        <div class="pin-controls">
-          <select id="openGroups" aria-label="当前打开的分组"></select>
-          <button type="button" id="pinButton">钉住</button>
+      <header class="page-header">
+        <img class="app-icon" src="../icons/icon48.png" alt="" width="56" height="56" />
+        <div class="title-block">
+          <p class="eyebrow">Chrome 扩展</p>
+          <h1>标签组管理器</h1>
+          <p class="lede">
+            按窗口整理标签页：分组优先、只展开一个分组、新标签进入当前展开的分组。
+          </p>
         </div>
-        <p class="hint">
-          Chrome 不提供禁止删除分组的 API。钉住通过“始终保持非空”实现：最后一个标签页关闭后，
-          扩展会用同标题、同颜色的分组重建一个未激活的空白新标签页。真实标签页不会被重新打开。
-        </p>
-        <p class="hint">
-          钉住顺序始终生效；由于排序会把所有分组放到未分组标签页之前，因此钉住顺序同时意味着“分组在前”。
-        </p>
-      </section>
+        <div class="header-actions">
+          <span class="version" id="version">v–</span>
+          <label class="master-switch">
+            <span class="master-label">启用扩展</span>
+            <input type="checkbox" id="enabled" class="switch-input" />
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+        </div>
+      </header>
 
-      <section class="actions">
-        <button type="button" id="normalizeButton">立即整理</button>
+      <div class="grid">
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>布局规则</h2>
+              <p class="hint">自动应用在每个普通窗口。</p>
+            </div>
+            <span class="card-mark" aria-hidden="true"></span>
+          </div>
+          <div class="setting-list">
+            <label class="setting">
+              <span class="setting-copy">
+                <span class="setting-title">分组标签页排在最前</span>
+                <span class="setting-desc">未分组标签页排在所有分组之后。</span>
+              </span>
+              <input type="checkbox" id="groupsFirst" class="switch-input" />
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+
+            <label class="setting">
+              <span class="setting-copy">
+                <span class="setting-title">只展开一个分组</span>
+                <span class="setting-desc">活动标签页所在的分组保持展开，其他分组收起。</span>
+              </span>
+              <input type="checkbox" id="singleExpanded" class="switch-input" />
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+
+            <label class="setting">
+              <span class="setting-copy">
+                <span class="setting-title">激活固定标签页时保留展开分组</span>
+                <span class="setting-desc">关闭后，激活固定标签页会收起所有分组。</span>
+              </span>
+              <input type="checkbox" id="keepLastWhenPinned" class="switch-input" />
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>标题点击</h2>
+              <p class="hint">控制点击分组标题时的焦点变化。</p>
+            </div>
+            <span class="card-mark" aria-hidden="true"></span>
+          </div>
+          <div class="setting-list">
+            <label class="setting">
+              <span class="setting-copy">
+                <span class="setting-title">展开折叠的分组时切换标签页</span>
+                <span class="setting-desc">点击折叠的分组标题后，激活该分组最近使用的标签页。</span>
+              </span>
+              <input type="checkbox" id="expandHeaderClick" class="switch-input" />
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+
+            <label class="setting setting-select">
+              <span class="setting-copy">
+                <span class="setting-title">点击已展开的分组标题</span>
+                <span class="setting-desc">三种行为都不受固定标签页影响。</span>
+              </span>
+              <select id="expandedGroupHeaderClick">
+                <option value="newtab">在分组内新建标签页</option>
+                <option value="collapse">收起并展开默认分组</option>
+                <option value="noaction">保持当前分组</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint">
+            选择“收起并展开默认分组”时，点击默认分组本身不会改变分组；没有默认分组时保持当前分组。
+          </p>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>新标签页</h2>
+              <p class="hint">决定新打开的标签页进入哪个分组。</p>
+            </div>
+            <span class="card-mark" aria-hidden="true"></span>
+          </div>
+          <div class="setting-list">
+            <label class="setting">
+              <span class="setting-copy">
+                <span class="setting-title">默认分组</span>
+                <span class="setting-desc">未分组标签页自动进入默认分组。</span>
+              </span>
+              <input type="checkbox" id="defaultGroup" class="switch-input" />
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+
+            <label class="setting">
+              <span class="setting-copy">
+                <span class="setting-title">外部标签页进入当前分组</span>
+                <span class="setting-desc">
+                  终端或其他应用打开的新标签页按当前展开分组处理；关闭后进入默认分组。
+                </span>
+              </span>
+              <input type="checkbox" id="externalNewTabInActiveGroup" class="switch-input" />
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+          </div>
+          <p class="hint">
+            Ctrl+T 和地址栏新标签页始终进入当前展开分组；页面链接保持 Chrome 默认行为。
+          </p>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>默认分组</h2>
+              <p class="hint">未分组标签页的归宿。</p>
+            </div>
+            <span class="card-mark" aria-hidden="true"></span>
+          </div>
+          <div class="field-grid">
+            <label class="field">
+              <span>名称</span>
+              <input type="text" id="defaultGroupTitle" maxlength="30" />
+            </label>
+            <label class="field">
+              <span>颜色</span>
+              <select id="defaultGroupColor"></select>
+            </label>
+          </div>
+          <p class="hint">修改名称或颜色时，现有默认分组会同步重命名。</p>
+        </section>
+
+        <section class="card wide">
+          <div class="card-head">
+            <div>
+              <h2>快捷键</h2>
+              <p class="hint">随时回到默认分组。</p>
+            </div>
+            <span class="card-mark" aria-hidden="true"></span>
+          </div>
+          <div class="shortcut-display">
+            <div class="shortcut-copy">
+              <span class="shortcut-label">切换到默认分组</span>
+              <kbd id="defaultGroupShortcut">读取中…</kbd>
+            </div>
+            <button type="button" id="changeShortcutButton">更改</button>
+          </div>
+          <p class="hint">
+            Chrome 不允许扩展直接修改快捷键；点击“更改”会打开 Chrome 的扩展快捷键页面。
+            默认建议 <code>Alt+W</code>。
+          </p>
+        </section>
+
+        <section class="card wide">
+          <div class="card-head">
+            <div>
+              <h2>钉住的分组</h2>
+              <p class="hint">按标题和颜色识别；同标题同色的分组会一起钉住。列表顺序即标签栏顺序。</p>
+            </div>
+            <span class="card-mark" aria-hidden="true"></span>
+          </div>
+          <ul id="pinnedList" class="pin-list"></ul>
+          <p id="emptyPinned" class="hint">还没有钉住的分组。</p>
+          <div class="pin-controls">
+            <select id="openGroups" aria-label="当前打开的分组"></select>
+            <button type="button" id="pinButton">钉住</button>
+          </div>
+          <p class="hint">
+            Chrome 不提供禁止删除分组的 API。钉住通过“始终保持非空”实现：最后一个标签页关闭后，
+            扩展会用同标题、同颜色的分组重建一个未激活的空白新标签页。真实标签页不会被重新打开。
+          </p>
+          <p class="hint">
+            钉住顺序始终生效；由于排序会把所有分组放到未分组标签页之前，因此钉住顺序同时意味着“分组在前”。
+          </p>
+        </section>
+      </div>
+
+      <footer class="toolbar">
+        <div class="toolbar-copy">
+          <h2>立即整理</h2>
+          <p class="hint">重新应用分组排序、默认分组和单展开规则。</p>
+        </div>
+        <button type="button" id="normalizeButton">整理所有窗口</button>
         <span id="status" class="status" role="status"></span>
-      </section>
+      </footer>
     </main>
     <script type="module" src="options.js"></script>
   </body>

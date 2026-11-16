@@ -108,6 +108,12 @@ Chrome 没有禁止删除分组的 API，也没有 `tabGroups.close`。保护方
 
 弹窗提供分组数、当前分组、总开关和“立即整理”；完整设置只在选项页。
 
+### 快捷键
+
+- `Alt+W` 切换到最近聚焦窗口的默认分组，并激活该分组最近使用的标签页。
+- 选项页“快捷键”卡片显示当前按键；点击“更改”打开 Chrome 的扩展快捷键页面。
+- Chrome 不允许扩展通过 API 直接修改快捷键，因此快捷键不写入 `settings`，也没有扩展内输入框；在 Chrome 页面修改后，回到选项页会自动刷新显示。
+
 ## 隐私
 
 - 没有网络请求，没有远程代码，没有 host 权限。
@@ -124,6 +130,7 @@ Chrome 没有禁止删除分组的 API，也没有 `tabGroups.close`。保护方
 - 在 Chrome 中手动重命名默认分组后，扩展不会跟随；下次启动可能新建一个默认分组。
 - `collapse` / `noaction` 下点击已展开分组的标题时，Chrome 会先自行选择焦点：有固定标签页时激活它，否则创建占位页，然后才通知扩展。扩展无法拦截这段原生行为，可能看到一次短暂切换或空白页闪烁；`newtab` 只会复用或创建一个组内 NTP。
 - 占位页识别依赖 Chrome 设置 `openerTabId` 且创建时间在 300ms 内；其他 Chrome 版本若改变该行为，可能多出一个占位标签页，或让扩展无法复用占位页而另行新建。
+- 快捷键由 Chrome 管理；扩展只能读取和展示，不能通过 API 直接改写。快捷键冲突或被清空时，选项页显示“未设置”。
 - 固定分组保护只在扩展就绪后生效；浏览器启动的最初约 1.5 秒内删除的分组不会被恢复。
 - 启动恢复依赖 Chrome 自己的会话恢复；扩展不保存 URL，也不提供跨浏览器配置同步之外的备份。
 
@@ -156,8 +163,8 @@ test/*.test.js         纯逻辑单元测试 + 后台事件接线测试（fake c
 版本号以 `manifest.json` 为准，并与 `CHANGELOG.md` 同步更新。发布使用 `v<version>` 标签：
 
 ```bash
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 `.github/workflows/release.yml` 会运行 `npm test`、校验标签与清单版本、打包 `tabgroup-manager-<version>.zip`（含 `manifest.json`、`src/`、`icons/`、README、CHANGELOG），并创建或更新 GitHub Release 资源。

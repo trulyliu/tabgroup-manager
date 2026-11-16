@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tab Group Manager",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "minimum_chrome_version": "124",
   "description": "Groups first, one expanded group, new tabs in the active group",
   "permissions": [
@@ -9,6 +9,14 @@
     "tabGroups",
     "storage"
   ],
+  "commands": {
+    "switch-to-default-group": {
+      "suggested_key": {
+        "default": "Alt+W"
+      },
+      "description": "切换到默认分组"
+    }
+  },
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
