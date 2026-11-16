@@ -1,0 +1,394 @@
+{
+  "extName": {
+    "message": "分頁群組管理器",
+    "description": "Extension name (store listing, ≤ 75 chars)."
+  },
+  "extDescription": {
+    "message": "群組優先、只展開一個群組、新分頁加入目前群組，讓分頁列井然有序。",
+    "description": "Extension description (store listing, ≤ 132 chars)."
+  },
+  "commandSwitchToDefault": {
+    "message": "切換到預設群組",
+    "description": "Keyboard shortcut description."
+  },
+  "defaultGroupTitle": {
+    "message": "其他",
+    "description": "Default title of the group that collects ungrouped tabs (≤ 30 chars)."
+  },
+  "errorDefaultTitleTaken": {
+    "message": "已有名為「$TITLE$」的群組，請換一個預設群組標題。",
+    "description": "Shown when the new default group title clashes with an open group.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Work"
+      }
+    }
+  },
+  "popupEnable": {
+    "message": "啟用",
+    "description": "Popup: master switch label."
+  },
+  "popupGroupCount": {
+    "message": "群組數",
+    "description": "Popup: number of groups in this window."
+  },
+  "popupActiveGroup": {
+    "message": "目前群組",
+    "description": "Popup: group of the active tab."
+  },
+  "popupNormalize": {
+    "message": "立即整理",
+    "description": "Popup: button that re-applies the rules."
+  },
+  "popupSettings": {
+    "message": "設定",
+    "description": "Popup: opens the options page."
+  },
+  "groupUntitled": {
+    "message": "未命名",
+    "description": "A group without a title."
+  },
+  "groupNone": {
+    "message": "無",
+    "description": "The active tab is not in a group."
+  },
+  "statusEnabled": {
+    "message": "已啟用",
+    "description": "Status after turning the extension on."
+  },
+  "statusDisabled": {
+    "message": "已停用",
+    "description": "Status after turning the extension off."
+  },
+  "statusTidied": {
+    "message": "已整理",
+    "description": "Status after tidying the current window."
+  },
+  "statusTidiedAll": {
+    "message": "已整理所有視窗",
+    "description": "Status after tidying all windows."
+  },
+  "statusSaved": {
+    "message": "已儲存",
+    "description": "Status after saving a setting."
+  },
+  "errorSaveFailed": {
+    "message": "儲存失敗",
+    "description": "Generic save error."
+  },
+  "errorTidyFailed": {
+    "message": "整理失敗",
+    "description": "Generic tidy error."
+  },
+  "optionsPageTitle": {
+    "message": "分頁群組管理器設定",
+    "description": "Options page <title>."
+  },
+  "optionsEyebrow": {
+    "message": "Chrome 擴充功能",
+    "description": "Small caption above the options heading."
+  },
+  "optionsLede": {
+    "message": "依視窗整理分頁：群組優先、只展開一個群組、新分頁加入目前展開的群組。",
+    "description": "Options page introduction."
+  },
+  "optionsMasterSwitch": {
+    "message": "啟用擴充功能",
+    "description": "Options: master switch label."
+  },
+  "layoutHeading": {
+    "message": "版面規則",
+    "description": "Card heading."
+  },
+  "layoutHint": {
+    "message": "自動套用到每個一般視窗。",
+    "description": "Card hint."
+  },
+  "groupsFirstTitle": {
+    "message": "群組分頁排在最前",
+    "description": "Setting title."
+  },
+  "groupsFirstDesc": {
+    "message": "未分組的分頁排在所有群組之後。",
+    "description": "Setting description."
+  },
+  "singleExpandedTitle": {
+    "message": "只展開一個群組",
+    "description": "Setting title."
+  },
+  "singleExpandedDesc": {
+    "message": "使用中分頁所在的群組保持展開，其他群組收合。",
+    "description": "Setting description."
+  },
+  "keepLastTitle": {
+    "message": "切換到固定分頁時保留展開的群組",
+    "description": "Setting title."
+  },
+  "keepLastDesc": {
+    "message": "關閉後，切換到固定分頁會收合所有群組。",
+    "description": "Setting description."
+  },
+  "headerHeading": {
+    "message": "標題點擊",
+    "description": "Card heading."
+  },
+  "headerHint": {
+    "message": "控制點擊群組標題時的焦點變化。",
+    "description": "Card hint."
+  },
+  "expandHeaderTitle": {
+    "message": "展開收合的群組時切換分頁",
+    "description": "Setting title."
+  },
+  "expandHeaderDesc": {
+    "message": "點擊收合的群組標題後，切換到該群組最近使用的分頁。",
+    "description": "Setting description."
+  },
+  "expandedHeaderTitle": {
+    "message": "點擊已展開的群組標題",
+    "description": "Setting title."
+  },
+  "expandedHeaderDesc": {
+    "message": "僅在開啟「只展開一個群組」時生效，不受固定分頁影響。",
+    "description": "Setting description."
+  },
+  "headerActionNewtab": {
+    "message": "在群組內開新分頁",
+    "description": "Header action option."
+  },
+  "headerActionCollapse": {
+    "message": "收合並展開預設群組",
+    "description": "Header action option."
+  },
+  "headerActionNoaction": {
+    "message": "保持目前群組",
+    "description": "Header action option."
+  },
+  "headerCollapseNote": {
+    "message": "選擇「收合並展開預設群組」時，點擊預設群組本身不會改變群組；沒有預設群組時保持目前群組。",
+    "description": "Card note."
+  },
+  "newTabsHeading": {
+    "message": "新分頁",
+    "description": "Card heading."
+  },
+  "newTabsHint": {
+    "message": "決定新開啟的分頁加入哪個群組。",
+    "description": "Card hint."
+  },
+  "defaultGroupToggleTitle": {
+    "message": "預設群組",
+    "description": "Setting title."
+  },
+  "defaultGroupToggleDesc": {
+    "message": "未分組的分頁自動加入預設群組。",
+    "description": "Setting description."
+  },
+  "externalTitle": {
+    "message": "外部分頁加入目前群組",
+    "description": "Setting title."
+  },
+  "externalDesc": {
+    "message": "終端機或其他應用程式開啟的新分頁加入目前展開的群組；關閉後加入預設群組。",
+    "description": "Setting description."
+  },
+  "newTabsNote": {
+    "message": "Ctrl+T 和網址列新分頁一律加入目前展開的群組；頁面連結維持 Chrome 預設行為。",
+    "description": "Card note."
+  },
+  "defaultGroupHeading": {
+    "message": "預設群組",
+    "description": "Card heading."
+  },
+  "defaultGroupHint": {
+    "message": "未分組分頁的去處。",
+    "description": "Card hint."
+  },
+  "defaultGroupNameLabel": {
+    "message": "名稱",
+    "description": "Field label."
+  },
+  "defaultGroupColorLabel": {
+    "message": "顏色",
+    "description": "Field label."
+  },
+  "defaultGroupNote": {
+    "message": "修改名稱或顏色時，現有的預設群組會同步重新命名。",
+    "description": "Card note."
+  },
+  "shortcutHeading": {
+    "message": "快速鍵",
+    "description": "Card heading."
+  },
+  "shortcutHint": {
+    "message": "隨時回到預設群組。",
+    "description": "Card hint."
+  },
+  "shortcutLoading": {
+    "message": "讀取中…",
+    "description": "Shortcut placeholder while loading."
+  },
+  "shortcutChange": {
+    "message": "變更",
+    "description": "Button that opens Chrome's shortcut page."
+  },
+  "shortcutNote": {
+    "message": "Chrome 不允許擴充功能直接修改快速鍵；點擊「變更」會開啟 Chrome 的擴充功能快速鍵頁面。預設建議：",
+    "description": "Card note, followed by the key combination."
+  },
+  "shortcutUnset": {
+    "message": "未設定",
+    "description": "No shortcut assigned."
+  },
+  "shortcutUnavailable": {
+    "message": "無法使用",
+    "description": "Shortcut could not be read."
+  },
+  "shortcutOpenManually": {
+    "message": "請手動開啟 chrome://extensions/shortcuts",
+    "description": "Error when the shortcut page cannot be opened."
+  },
+  "pinnedHeading": {
+    "message": "釘選的群組",
+    "description": "Card heading."
+  },
+  "pinnedHint": {
+    "message": "依標題和顏色識別；標題與顏色相同的群組會一起釘選。清單順序就是分頁列順序。",
+    "description": "Card hint."
+  },
+  "pinnedEmpty": {
+    "message": "尚未釘選任何群組。",
+    "description": "Empty list text."
+  },
+  "pinnedOpenGroupsLabel": {
+    "message": "目前開啟的群組",
+    "description": "Accessible label of the group picker."
+  },
+  "pinButton": {
+    "message": "釘選",
+    "description": "Button that pins the selected group."
+  },
+  "pinnedNoteProtection": {
+    "message": "Chrome 不提供禁止刪除群組的 API。釘選透過「始終保持非空」實現：最後一個分頁關閉後，擴充功能會以相同標題與顏色重建群組，並放入一個未啟用的空白新分頁。真實分頁不會被重新開啟。",
+    "description": "Card note."
+  },
+  "pinnedNoteOrder": {
+    "message": "釘選順序一律生效；由於排序會把所有群組放到未分組分頁之前，因此釘選順序同時代表「群組優先」。",
+    "description": "Card note."
+  },
+  "pinnedNotOpen": {
+    "message": "未開啟",
+    "description": "A pinned group that is not open in any window."
+  },
+  "pinnedSharedCount": {
+    "message": "標題與顏色相同的群組會一起釘選（$COUNT$ 個）",
+    "description": "Several open groups match one pinned entry.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "pinMoveUp": {
+    "message": "上移",
+    "description": "Tooltip."
+  },
+  "pinMoveDown": {
+    "message": "下移",
+    "description": "Tooltip."
+  },
+  "unpin": {
+    "message": "取消釘選",
+    "description": "Button."
+  },
+  "pinSelectPlaceholder": {
+    "message": "選擇要釘選的群組…",
+    "description": "Picker placeholder."
+  },
+  "pinNoCandidates": {
+    "message": "沒有可釘選的具名群組",
+    "description": "Picker placeholder when nothing can be pinned."
+  },
+  "pinOptionLabel": {
+    "message": "$TITLE$（$COLOR$）",
+    "description": "Picker entry.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Work"
+      },
+      "color": {
+        "content": "$2",
+        "example": "Blue"
+      }
+    }
+  },
+  "pinOptionLabelCount": {
+    "message": "$TITLE$（$COLOR$，$COUNT$ 個）",
+    "description": "Picker entry for several matching groups.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Work"
+      },
+      "color": {
+        "content": "$2",
+        "example": "Blue"
+      },
+      "count": {
+        "content": "$3",
+        "example": "2"
+      }
+    }
+  },
+  "tidyHeading": {
+    "message": "立即整理",
+    "description": "Footer heading."
+  },
+  "tidyHint": {
+    "message": "重新套用群組排序、預設群組與單一展開規則。",
+    "description": "Footer hint."
+  },
+  "tidyButton": {
+    "message": "整理所有視窗",
+    "description": "Footer button."
+  },
+  "colorGrey": {
+    "message": "灰色",
+    "description": "Tab group color."
+  },
+  "colorBlue": {
+    "message": "藍色",
+    "description": "Tab group color."
+  },
+  "colorRed": {
+    "message": "紅色",
+    "description": "Tab group color."
+  },
+  "colorYellow": {
+    "message": "黃色",
+    "description": "Tab group color."
+  },
+  "colorGreen": {
+    "message": "綠色",
+    "description": "Tab group color."
+  },
+  "colorPink": {
+    "message": "粉紅色",
+    "description": "Tab group color."
+  },
+  "colorPurple": {
+    "message": "紫色",
+    "description": "Tab group color."
+  },
+  "colorCyan": {
+    "message": "青色",
+    "description": "Tab group color."
+  },
+  "colorOrange": {
+    "message": "橘色",
+    "description": "Tab group color."
+  }
+}

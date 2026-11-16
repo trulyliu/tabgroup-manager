@@ -1,0 +1,394 @@
+{
+  "extName": {
+    "message": "Tab Group Manager",
+    "description": "Extension name (store listing, ≤ 75 chars)."
+  },
+  "extDescription": {
+    "message": "Keeps tab groups first, one group expanded, and new tabs in the group you are using.",
+    "description": "Extension description (store listing, ≤ 132 chars)."
+  },
+  "commandSwitchToDefault": {
+    "message": "Switch to the default group",
+    "description": "Keyboard shortcut description."
+  },
+  "defaultGroupTitle": {
+    "message": "Other",
+    "description": "Default title of the group that collects ungrouped tabs (≤ 30 chars)."
+  },
+  "errorDefaultTitleTaken": {
+    "message": "A group named “$TITLE$” is already open. Choose another default group name.",
+    "description": "Shown when the new default group title clashes with an open group.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Work"
+      }
+    }
+  },
+  "popupEnable": {
+    "message": "Enabled",
+    "description": "Popup: master switch label."
+  },
+  "popupGroupCount": {
+    "message": "Groups",
+    "description": "Popup: number of groups in this window."
+  },
+  "popupActiveGroup": {
+    "message": "Current group",
+    "description": "Popup: group of the active tab."
+  },
+  "popupNormalize": {
+    "message": "Tidy up now",
+    "description": "Popup: button that re-applies the rules."
+  },
+  "popupSettings": {
+    "message": "Settings",
+    "description": "Popup: opens the options page."
+  },
+  "groupUntitled": {
+    "message": "Untitled",
+    "description": "A group without a title."
+  },
+  "groupNone": {
+    "message": "None",
+    "description": "The active tab is not in a group."
+  },
+  "statusEnabled": {
+    "message": "Enabled",
+    "description": "Status after turning the extension on."
+  },
+  "statusDisabled": {
+    "message": "Paused",
+    "description": "Status after turning the extension off."
+  },
+  "statusTidied": {
+    "message": "Tidied up",
+    "description": "Status after tidying the current window."
+  },
+  "statusTidiedAll": {
+    "message": "All windows tidied",
+    "description": "Status after tidying all windows."
+  },
+  "statusSaved": {
+    "message": "Saved",
+    "description": "Status after saving a setting."
+  },
+  "errorSaveFailed": {
+    "message": "Could not save",
+    "description": "Generic save error."
+  },
+  "errorTidyFailed": {
+    "message": "Could not tidy up",
+    "description": "Generic tidy error."
+  },
+  "optionsPageTitle": {
+    "message": "Tab Group Manager settings",
+    "description": "Options page <title>."
+  },
+  "optionsEyebrow": {
+    "message": "Chrome extension",
+    "description": "Small caption above the options heading."
+  },
+  "optionsLede": {
+    "message": "Organizes tabs per window: groups first, one expanded group, new tabs in the expanded group.",
+    "description": "Options page introduction."
+  },
+  "optionsMasterSwitch": {
+    "message": "Enable extension",
+    "description": "Options: master switch label."
+  },
+  "layoutHeading": {
+    "message": "Layout",
+    "description": "Card heading."
+  },
+  "layoutHint": {
+    "message": "Applied automatically to every normal window.",
+    "description": "Card hint."
+  },
+  "groupsFirstTitle": {
+    "message": "Groups first",
+    "description": "Setting title."
+  },
+  "groupsFirstDesc": {
+    "message": "Ungrouped tabs go after all groups.",
+    "description": "Setting description."
+  },
+  "singleExpandedTitle": {
+    "message": "Expand only one group",
+    "description": "Setting title."
+  },
+  "singleExpandedDesc": {
+    "message": "The active tab's group stays expanded; the others collapse.",
+    "description": "Setting description."
+  },
+  "keepLastTitle": {
+    "message": "Keep a group expanded on pinned tabs",
+    "description": "Setting title."
+  },
+  "keepLastDesc": {
+    "message": "When off, activating a pinned tab collapses every group.",
+    "description": "Setting description."
+  },
+  "headerHeading": {
+    "message": "Header clicks",
+    "description": "Card heading."
+  },
+  "headerHint": {
+    "message": "How focus moves when you click a group header.",
+    "description": "Card hint."
+  },
+  "expandHeaderTitle": {
+    "message": "Switch tabs when expanding a group",
+    "description": "Setting title."
+  },
+  "expandHeaderDesc": {
+    "message": "Clicking a collapsed group's header activates its most recently used tab.",
+    "description": "Setting description."
+  },
+  "expandedHeaderTitle": {
+    "message": "Clicking an expanded group's header",
+    "description": "Setting title."
+  },
+  "expandedHeaderDesc": {
+    "message": "Only with “Expand only one group” on. Pinned tabs don't affect it.",
+    "description": "Setting description."
+  },
+  "headerActionNewtab": {
+    "message": "Open a new tab in the group",
+    "description": "Header action option."
+  },
+  "headerActionCollapse": {
+    "message": "Collapse it and expand the default group",
+    "description": "Header action option."
+  },
+  "headerActionNoaction": {
+    "message": "Keep the current group",
+    "description": "Header action option."
+  },
+  "headerCollapseNote": {
+    "message": "With “Collapse it and expand the default group”, clicking the default group itself changes nothing; without a default group the current group stays expanded.",
+    "description": "Card note."
+  },
+  "newTabsHeading": {
+    "message": "New tabs",
+    "description": "Card heading."
+  },
+  "newTabsHint": {
+    "message": "Decides which group newly opened tabs join.",
+    "description": "Card hint."
+  },
+  "defaultGroupToggleTitle": {
+    "message": "Default group",
+    "description": "Setting title."
+  },
+  "defaultGroupToggleDesc": {
+    "message": "Ungrouped tabs join the default group automatically.",
+    "description": "Setting description."
+  },
+  "externalTitle": {
+    "message": "External tabs join the current group",
+    "description": "Setting title."
+  },
+  "externalDesc": {
+    "message": "Tabs opened by a terminal or another app go to the expanded group; when off, to the default group.",
+    "description": "Setting description."
+  },
+  "newTabsNote": {
+    "message": "Ctrl+T and address-bar new tabs always join the expanded group; links keep Chrome's default behavior.",
+    "description": "Card note."
+  },
+  "defaultGroupHeading": {
+    "message": "Default group",
+    "description": "Card heading."
+  },
+  "defaultGroupHint": {
+    "message": "Where ungrouped tabs go.",
+    "description": "Card hint."
+  },
+  "defaultGroupNameLabel": {
+    "message": "Name",
+    "description": "Field label."
+  },
+  "defaultGroupColorLabel": {
+    "message": "Color",
+    "description": "Field label."
+  },
+  "defaultGroupNote": {
+    "message": "Changing the name or color renames the existing default group too.",
+    "description": "Card note."
+  },
+  "shortcutHeading": {
+    "message": "Keyboard shortcut",
+    "description": "Card heading."
+  },
+  "shortcutHint": {
+    "message": "Jump back to the default group at any time.",
+    "description": "Card hint."
+  },
+  "shortcutLoading": {
+    "message": "Loading…",
+    "description": "Shortcut placeholder while loading."
+  },
+  "shortcutChange": {
+    "message": "Change",
+    "description": "Button that opens Chrome's shortcut page."
+  },
+  "shortcutNote": {
+    "message": "Chrome doesn't let extensions change shortcuts directly; “Change” opens Chrome's extension shortcuts page. Suggested default:",
+    "description": "Card note, followed by the key combination."
+  },
+  "shortcutUnset": {
+    "message": "Not set",
+    "description": "No shortcut assigned."
+  },
+  "shortcutUnavailable": {
+    "message": "Unavailable",
+    "description": "Shortcut could not be read."
+  },
+  "shortcutOpenManually": {
+    "message": "Open chrome://extensions/shortcuts manually",
+    "description": "Error when the shortcut page cannot be opened."
+  },
+  "pinnedHeading": {
+    "message": "Pinned groups",
+    "description": "Card heading."
+  },
+  "pinnedHint": {
+    "message": "Matched by title and color; groups with the same title and color are pinned together. List order is tab strip order.",
+    "description": "Card hint."
+  },
+  "pinnedEmpty": {
+    "message": "No pinned groups yet.",
+    "description": "Empty list text."
+  },
+  "pinnedOpenGroupsLabel": {
+    "message": "Open groups",
+    "description": "Accessible label of the group picker."
+  },
+  "pinButton": {
+    "message": "Pin",
+    "description": "Button that pins the selected group."
+  },
+  "pinnedNoteProtection": {
+    "message": "Chrome has no API to prevent deleting a group, so pinning keeps it from becoming empty: after its last tab closes, the extension recreates a group with the same title and color holding one inactive blank tab. Your real tabs are never reopened.",
+    "description": "Card note."
+  },
+  "pinnedNoteOrder": {
+    "message": "Pinned order always applies. Because sorting puts every group before ungrouped tabs, pinning also implies “groups first”.",
+    "description": "Card note."
+  },
+  "pinnedNotOpen": {
+    "message": "Not open",
+    "description": "A pinned group that is not open in any window."
+  },
+  "pinnedSharedCount": {
+    "message": "$COUNT$ groups with this title and color are pinned together",
+    "description": "Several open groups match one pinned entry.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "pinMoveUp": {
+    "message": "Move up",
+    "description": "Tooltip."
+  },
+  "pinMoveDown": {
+    "message": "Move down",
+    "description": "Tooltip."
+  },
+  "unpin": {
+    "message": "Unpin",
+    "description": "Button."
+  },
+  "pinSelectPlaceholder": {
+    "message": "Choose a group to pin…",
+    "description": "Picker placeholder."
+  },
+  "pinNoCandidates": {
+    "message": "No named groups to pin",
+    "description": "Picker placeholder when nothing can be pinned."
+  },
+  "pinOptionLabel": {
+    "message": "$TITLE$ ($COLOR$)",
+    "description": "Picker entry.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Work"
+      },
+      "color": {
+        "content": "$2",
+        "example": "Blue"
+      }
+    }
+  },
+  "pinOptionLabelCount": {
+    "message": "$TITLE$ ($COLOR$, $COUNT$ groups)",
+    "description": "Picker entry for several matching groups.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Work"
+      },
+      "color": {
+        "content": "$2",
+        "example": "Blue"
+      },
+      "count": {
+        "content": "$3",
+        "example": "2"
+      }
+    }
+  },
+  "tidyHeading": {
+    "message": "Tidy up now",
+    "description": "Footer heading."
+  },
+  "tidyHint": {
+    "message": "Re-apply group order, the default group and single-expanded rules.",
+    "description": "Footer hint."
+  },
+  "tidyButton": {
+    "message": "Tidy all windows",
+    "description": "Footer button."
+  },
+  "colorGrey": {
+    "message": "Grey",
+    "description": "Tab group color."
+  },
+  "colorBlue": {
+    "message": "Blue",
+    "description": "Tab group color."
+  },
+  "colorRed": {
+    "message": "Red",
+    "description": "Tab group color."
+  },
+  "colorYellow": {
+    "message": "Yellow",
+    "description": "Tab group color."
+  },
+  "colorGreen": {
+    "message": "Green",
+    "description": "Tab group color."
+  },
+  "colorPink": {
+    "message": "Pink",
+    "description": "Tab group color."
+  },
+  "colorPurple": {
+    "message": "Purple",
+    "description": "Tab group color."
+  },
+  "colorCyan": {
+    "message": "Cyan",
+    "description": "Tab group color."
+  },
+  "colorOrange": {
+    "message": "Orange",
+    "description": "Tab group color."
+  }
+}

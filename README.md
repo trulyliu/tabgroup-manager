@@ -1,5 +1,7 @@
 # 标签组管理器（Tab Group Manager）
 
+[English](README.en.md) | [中文](README.md)
+
 <img src="icons/icon128.png" alt="扩展图标" width="96" align="right" />
 
 Chrome MV3 扩展，把标签栏整理成“分组优先、只展开一个分组”的工作区：
@@ -155,9 +157,11 @@ npm test
 目录：
 
 ```
+_locales/              多语言本地化资源（en, zh_CN, zh_TW）
 manifest.json          MV3 清单（tabs / tabGroups / storage）
 icons/                 扩展图标（SVG 源文件 + 16/32/48/128 PNG）
 src/background.js      服务 worker：事件接线、窗口归一化、固定分组保护
+src/i18n.js            UI 本地化辅助模块
 src/lib/layout.js      纯函数：排序、折叠、新标签页目标
 src/lib/pinned.js      纯函数：钉住标题+颜色匹配与恢复方式
 src/lib/settings.js    设置默认值、校验、读写

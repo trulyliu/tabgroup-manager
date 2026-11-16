@@ -1,0 +1,394 @@
+{
+  "extName": {
+    "message": "标签组管理器",
+    "description": "Extension name (store listing, ≤ 75 chars)."
+  },
+  "extDescription": {
+    "message": "分组优先、只展开一个分组、新标签页进入当前分组，让标签栏井然有序。",
+    "description": "Extension description (store listing, ≤ 132 chars)."
+  },
+  "commandSwitchToDefault": {
+    "message": "切换到默认分组",
+    "description": "Keyboard shortcut description."
+  },
+  "defaultGroupTitle": {
+    "message": "其他",
+    "description": "Default title of the group that collects ungrouped tabs (≤ 30 chars)."
+  },
+  "errorDefaultTitleTaken": {
+    "message": "已有名为“$TITLE$”的分组，请换一个默认分组标题。",
+    "description": "Shown when the new default group title clashes with an open group.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Work"
+      }
+    }
+  },
+  "popupEnable": {
+    "message": "启用",
+    "description": "Popup: master switch label."
+  },
+  "popupGroupCount": {
+    "message": "分组数",
+    "description": "Popup: number of groups in this window."
+  },
+  "popupActiveGroup": {
+    "message": "当前分组",
+    "description": "Popup: group of the active tab."
+  },
+  "popupNormalize": {
+    "message": "立即整理",
+    "description": "Popup: button that re-applies the rules."
+  },
+  "popupSettings": {
+    "message": "设置",
+    "description": "Popup: opens the options page."
+  },
+  "groupUntitled": {
+    "message": "未命名",
+    "description": "A group without a title."
+  },
+  "groupNone": {
+    "message": "无",
+    "description": "The active tab is not in a group."
+  },
+  "statusEnabled": {
+    "message": "已启用",
+    "description": "Status after turning the extension on."
+  },
+  "statusDisabled": {
+    "message": "已停用",
+    "description": "Status after turning the extension off."
+  },
+  "statusTidied": {
+    "message": "已整理",
+    "description": "Status after tidying the current window."
+  },
+  "statusTidiedAll": {
+    "message": "已整理所有窗口",
+    "description": "Status after tidying all windows."
+  },
+  "statusSaved": {
+    "message": "已保存",
+    "description": "Status after saving a setting."
+  },
+  "errorSaveFailed": {
+    "message": "保存失败",
+    "description": "Generic save error."
+  },
+  "errorTidyFailed": {
+    "message": "整理失败",
+    "description": "Generic tidy error."
+  },
+  "optionsPageTitle": {
+    "message": "标签组管理器设置",
+    "description": "Options page <title>."
+  },
+  "optionsEyebrow": {
+    "message": "Chrome 扩展",
+    "description": "Small caption above the options heading."
+  },
+  "optionsLede": {
+    "message": "按窗口整理标签页：分组优先、只展开一个分组、新标签进入当前展开的分组。",
+    "description": "Options page introduction."
+  },
+  "optionsMasterSwitch": {
+    "message": "启用扩展",
+    "description": "Options: master switch label."
+  },
+  "layoutHeading": {
+    "message": "布局规则",
+    "description": "Card heading."
+  },
+  "layoutHint": {
+    "message": "自动应用在每个普通窗口。",
+    "description": "Card hint."
+  },
+  "groupsFirstTitle": {
+    "message": "分组标签页排在最前",
+    "description": "Setting title."
+  },
+  "groupsFirstDesc": {
+    "message": "未分组标签页排在所有分组之后。",
+    "description": "Setting description."
+  },
+  "singleExpandedTitle": {
+    "message": "只展开一个分组",
+    "description": "Setting title."
+  },
+  "singleExpandedDesc": {
+    "message": "活动标签页所在的分组保持展开，其他分组收起。",
+    "description": "Setting description."
+  },
+  "keepLastTitle": {
+    "message": "激活固定标签页时保留展开分组",
+    "description": "Setting title."
+  },
+  "keepLastDesc": {
+    "message": "关闭后，激活固定标签页会收起所有分组。",
+    "description": "Setting description."
+  },
+  "headerHeading": {
+    "message": "标题点击",
+    "description": "Card heading."
+  },
+  "headerHint": {
+    "message": "控制点击分组标题时的焦点变化。",
+    "description": "Card hint."
+  },
+  "expandHeaderTitle": {
+    "message": "展开折叠的分组时切换标签页",
+    "description": "Setting title."
+  },
+  "expandHeaderDesc": {
+    "message": "点击折叠的分组标题后，激活该分组最近使用的标签页。",
+    "description": "Setting description."
+  },
+  "expandedHeaderTitle": {
+    "message": "点击已展开的分组标题",
+    "description": "Setting title."
+  },
+  "expandedHeaderDesc": {
+    "message": "仅在开启“只展开一个分组”时生效，不受固定标签页影响。",
+    "description": "Setting description."
+  },
+  "headerActionNewtab": {
+    "message": "在分组内新建标签页",
+    "description": "Header action option."
+  },
+  "headerActionCollapse": {
+    "message": "收起并展开默认分组",
+    "description": "Header action option."
+  },
+  "headerActionNoaction": {
+    "message": "保持当前分组",
+    "description": "Header action option."
+  },
+  "headerCollapseNote": {
+    "message": "选择“收起并展开默认分组”时，点击默认分组本身不会改变分组；没有默认分组时保持当前分组。",
+    "description": "Card note."
+  },
+  "newTabsHeading": {
+    "message": "新标签页",
+    "description": "Card heading."
+  },
+  "newTabsHint": {
+    "message": "决定新打开的标签页进入哪个分组。",
+    "description": "Card hint."
+  },
+  "defaultGroupToggleTitle": {
+    "message": "默认分组",
+    "description": "Setting title."
+  },
+  "defaultGroupToggleDesc": {
+    "message": "未分组标签页自动进入默认分组。",
+    "description": "Setting description."
+  },
+  "externalTitle": {
+    "message": "外部标签页进入当前分组",
+    "description": "Setting title."
+  },
+  "externalDesc": {
+    "message": "终端或其他应用打开的新标签页按当前展开分组处理；关闭后进入默认分组。",
+    "description": "Setting description."
+  },
+  "newTabsNote": {
+    "message": "Ctrl+T 和地址栏新标签页始终进入当前展开分组；页面链接保持 Chrome 默认行为。",
+    "description": "Card note."
+  },
+  "defaultGroupHeading": {
+    "message": "默认分组",
+    "description": "Card heading."
+  },
+  "defaultGroupHint": {
+    "message": "未分组标签页的归宿。",
+    "description": "Card hint."
+  },
+  "defaultGroupNameLabel": {
+    "message": "名称",
+    "description": "Field label."
+  },
+  "defaultGroupColorLabel": {
+    "message": "颜色",
+    "description": "Field label."
+  },
+  "defaultGroupNote": {
+    "message": "修改名称或颜色时，现有默认分组会同步重命名。",
+    "description": "Card note."
+  },
+  "shortcutHeading": {
+    "message": "快捷键",
+    "description": "Card heading."
+  },
+  "shortcutHint": {
+    "message": "随时回到默认分组。",
+    "description": "Card hint."
+  },
+  "shortcutLoading": {
+    "message": "读取中…",
+    "description": "Shortcut placeholder while loading."
+  },
+  "shortcutChange": {
+    "message": "更改",
+    "description": "Button that opens Chrome's shortcut page."
+  },
+  "shortcutNote": {
+    "message": "Chrome 不允许扩展直接修改快捷键；点击“更改”会打开 Chrome 的扩展快捷键页面。默认建议：",
+    "description": "Card note, followed by the key combination."
+  },
+  "shortcutUnset": {
+    "message": "未设置",
+    "description": "No shortcut assigned."
+  },
+  "shortcutUnavailable": {
+    "message": "不可用",
+    "description": "Shortcut could not be read."
+  },
+  "shortcutOpenManually": {
+    "message": "请手动打开 chrome://extensions/shortcuts",
+    "description": "Error when the shortcut page cannot be opened."
+  },
+  "pinnedHeading": {
+    "message": "钉住的分组",
+    "description": "Card heading."
+  },
+  "pinnedHint": {
+    "message": "按标题和颜色识别；同标题同色的分组会一起钉住。列表顺序即标签栏顺序。",
+    "description": "Card hint."
+  },
+  "pinnedEmpty": {
+    "message": "还没有钉住的分组。",
+    "description": "Empty list text."
+  },
+  "pinnedOpenGroupsLabel": {
+    "message": "当前打开的分组",
+    "description": "Accessible label of the group picker."
+  },
+  "pinButton": {
+    "message": "钉住",
+    "description": "Button that pins the selected group."
+  },
+  "pinnedNoteProtection": {
+    "message": "Chrome 不提供禁止删除分组的 API。钉住通过“始终保持非空”实现：最后一个标签页关闭后，扩展会用同标题、同颜色的分组重建一个未激活的空白新标签页。真实标签页不会被重新打开。",
+    "description": "Card note."
+  },
+  "pinnedNoteOrder": {
+    "message": "钉住顺序始终生效；由于排序会把所有分组放到未分组标签页之前，因此钉住顺序同时意味着“分组在前”。",
+    "description": "Card note."
+  },
+  "pinnedNotOpen": {
+    "message": "未打开",
+    "description": "A pinned group that is not open in any window."
+  },
+  "pinnedSharedCount": {
+    "message": "同标题同色分组会一起钉住（$COUNT$ 个）",
+    "description": "Several open groups match one pinned entry.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "pinMoveUp": {
+    "message": "上移",
+    "description": "Tooltip."
+  },
+  "pinMoveDown": {
+    "message": "下移",
+    "description": "Tooltip."
+  },
+  "unpin": {
+    "message": "取消钉住",
+    "description": "Button."
+  },
+  "pinSelectPlaceholder": {
+    "message": "选择要钉住的分组…",
+    "description": "Picker placeholder."
+  },
+  "pinNoCandidates": {
+    "message": "没有可钉住的有名分组",
+    "description": "Picker placeholder when nothing can be pinned."
+  },
+  "pinOptionLabel": {
+    "message": "$TITLE$（$COLOR$）",
+    "description": "Picker entry.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Work"
+      },
+      "color": {
+        "content": "$2",
+        "example": "Blue"
+      }
+    }
+  },
+  "pinOptionLabelCount": {
+    "message": "$TITLE$（$COLOR$，$COUNT$ 个）",
+    "description": "Picker entry for several matching groups.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Work"
+      },
+      "color": {
+        "content": "$2",
+        "example": "Blue"
+      },
+      "count": {
+        "content": "$3",
+        "example": "2"
+      }
+    }
+  },
+  "tidyHeading": {
+    "message": "立即整理",
+    "description": "Footer heading."
+  },
+  "tidyHint": {
+    "message": "重新应用分组排序、默认分组和单展开规则。",
+    "description": "Footer hint."
+  },
+  "tidyButton": {
+    "message": "整理所有窗口",
+    "description": "Footer button."
+  },
+  "colorGrey": {
+    "message": "灰色",
+    "description": "Tab group color."
+  },
+  "colorBlue": {
+    "message": "蓝色",
+    "description": "Tab group color."
+  },
+  "colorRed": {
+    "message": "红色",
+    "description": "Tab group color."
+  },
+  "colorYellow": {
+    "message": "黄色",
+    "description": "Tab group color."
+  },
+  "colorGreen": {
+    "message": "绿色",
+    "description": "Tab group color."
+  },
+  "colorPink": {
+    "message": "粉色",
+    "description": "Tab group color."
+  },
+  "colorPurple": {
+    "message": "紫色",
+    "description": "Tab group color."
+  },
+  "colorCyan": {
+    "message": "青色",
+    "description": "Tab group color."
+  },
+  "colorOrange": {
+    "message": "橙色",
+    "description": "Tab group color."
+  }
+}

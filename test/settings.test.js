@@ -62,3 +62,22 @@ test("pinned groups are deduplicated by title and color, not title alone", () =>
     { title: "Default", color: "blue" },
   ]);
 });
+
+test("the default group title follows chrome.i18n and falls back to English", async () => {
+  const { localizedDefaultTitle, LEGACY_DEFAULT_TITLE } = await import("../src/lib/settings.js");
+  assert.equal(globalThis.chrome, undefined);
+  assert.equal(localizedDefaultTitle(), "Other");
+  assert.equal(normalizeSettings(null).defaultGroupTitle, "Other");
+  assert.equal(LEGACY_DEFAULT_TITLE, "其他");
+
+  globalThis.chrome = { i18n: { getMessage: (key) => (key === "defaultGroupTitle" ? "其他" : "") } };
+  try {
+    assert.equal(normalizeSettings(null).defaultGroupTitle, "其他");
+    // A stored title always wins over the localized default.
+    assert.equal(normalizeSettings({ defaultGroupTitle: "Inbox" }).defaultGroupTitle, "Inbox");
+    globalThis.chrome.i18n.getMessage = () => "";
+    assert.equal(normalizeSettings(null).defaultGroupTitle, "Other");
+  } finally {
+    delete globalThis.chrome;
+  }
+});

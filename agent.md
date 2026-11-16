@@ -9,16 +9,18 @@
 - **永远不要存储、记录或发送 URL。** 固定分组快照只允许分组 ID、窗口 ID、标题、颜色、折叠状态、标签页 ID 和时间戳。
 - `src/lib/*.js` 必须是纯函数，不调用 `chrome.*`；所有 Chrome API 调用集中在 `src/background.js` 和两个 UI 页面。
 - 设置写入统一走后台：UI 发送 `{type:"save-settings", patch}`，由后台校验、必要时重命名默认分组，再写 `chrome.storage.sync.settings`。
-- 用户可见文案使用中文；代码标识符和注释使用英文。
+- 用户可见文案统一走 Chrome i18n 多语言系统（`_locales/*/messages.json`，现支持 en、zh_CN、zh_TW），HTML 模板使用 `data-i18n` 属性，脚本使用 `src/i18n.js`（`t()` / `colorLabel()`）；代码标识符和注释使用英文。
 - 改完运行 `npm test`。脚本是 `node --test test/*.test.js`（Node 24 不接受裸 `test/` 目录参数）。
 
 ## 文件地图
 
 | 文件 | 职责 |
 | --- | --- |
+| `_locales/` | 多语言消息字典（`en`、`zh_CN`、`zh_TW`），支持 manifest 与 UI 页面本地化 |
 | `manifest.json` | 权限、service worker module、选项页、弹窗、图标、`switch-to-default-group` 快捷键 |
 | `icons/icon.svg` + PNG | 扩展图标源文件，改图后重新导出 16/32/48/128 |
 | `src/background.js` | 事件接线、逐窗口串行归一化、启动门、固定分组保护、设置写入 |
+| `src/i18n.js` | UI 多语言加载辅助（`t()`、`localizePage()`、`colorLabel()`） |
 | `src/lib/layout.js` | `planGroupOrder`、`planCollapse`、`planNewTabTarget`、默认分组查找与重复合并、NTP URL 判定 |
 | `src/lib/pinned.js` | `isPinnedGroup`（标题+颜色）、`choosePinnedRestore`（`skip` / `regroup` / `blank`） |
 | `src/lib/settings.js` | 默认值、标题/颜色/钉住列表校验、`loadSettings` / `saveSettings` |

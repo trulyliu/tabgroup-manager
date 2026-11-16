@@ -3,6 +3,8 @@
 // Each test file runs in its own process (node --test), so a file installs one
 // fake, imports src/background.js once, and drives events against it.
 
+import { readFileSync } from "node:fs";
+
 export const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -37,10 +39,40 @@ export const BASE_SETTINGS = Object.freeze({
   pinnedGroups: [],
 });
 
+/** Load _locales/<locale>/messages.json (null if the locale does not exist). */
+export function loadMessages(locale) {
+  try {
+    const url = new URL(`../_locales/${locale}/messages.json`, import.meta.url);
+    return JSON.parse(readFileSync(url, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/** chrome.i18n.getMessage semantics: $NAME$ -> placeholder content -> $1.. */
+export function formatMessage(messages, key, substitutions) {
+  const entry = Object.entries(messages ?? {}).find(
+    ([name]) => name.toLowerCase() === String(key).toLowerCase(),
+  )?.[1];
+  if (!entry) return "";
+  const subs = substitutions == null ? [] : [].concat(substitutions).map(String);
+  const placeholders = Object.fromEntries(
+    Object.entries(entry.placeholders ?? {}).map(([name, value]) => [name.toLowerCase(), value.content]),
+  );
+  const positional = (text) => text.replace(/\$(\d)/g, (_, n) => subs[Number(n) - 1] ?? "");
+  return entry.message
+    .replace(/\$([A-Za-z0-9_@]+)\$/g, (whole, name) =>
+      name.toLowerCase() in placeholders ? positional(placeholders[name.toLowerCase()]) : whole,
+    )
+    .replace(/\$\$/g, "$");
+}
+
 /**
  * Install a fake chrome on globalThis. `session` seeds chrome.storage.session
  * (bootReady: true means "worker wake-up inside a running browser session").
  * `storageDelayMs` makes storage reads take real time, like Chrome's IPC.
+ * `settings: null` means nothing is stored in chrome.storage.sync yet.
+ * `locale` picks the _locales folder chrome.i18n reads (falls back to en).
  */
 export function installFakeChrome({
   windows = [{ id: 1, type: "normal", focused: true }],
@@ -49,6 +81,7 @@ export function installFakeChrome({
   settings = {},
   session = { bootReady: true },
   storageDelayMs = 0,
+  locale = "en",
   nextTabId = 10,
   nextGroupId = 200,
 } = {}) {
@@ -56,7 +89,7 @@ export function installFakeChrome({
     windows,
     groups,
     tabs,
-    settings: { ...BASE_SETTINGS, ...settings },
+    settings: settings === null ? null : { ...BASE_SETTINGS, ...settings },
     session: { ...session },
     calls: { group: [], create: [], move: [], remove: [], sequence: [], update: [] },
     failures: { group: [], update: [] },
@@ -112,7 +145,21 @@ export function installFakeChrome({
     return resolvedId;
   }
 
+  const fallbackMessages = loadMessages("en");
+  const messages = loadMessages(locale) ?? fallbackMessages;
+
   const chrome = {
+    i18n: {
+      getMessage(key, substitutions) {
+        return (
+          formatMessage(messages, key, substitutions) ||
+          formatMessage(fallbackMessages, key, substitutions)
+        );
+      },
+      getUILanguage() {
+        return locale.replace("_", "-");
+      },
+    },
     runtime: {
       id: "test-extension-id",
       onStartup: makeEvent(),
@@ -129,11 +176,13 @@ export function installFakeChrome({
       sync: {
         async get(key) {
           await delay();
-          return key === "settings" ? { settings: clone(state.settings) } : {};
+          if (key !== "settings" || state.settings == null) return {};
+          return { settings: clone(state.settings) };
         },
         async set(values) {
           if (!values.settings) return;
           const oldValue = clone(state.settings);
+          if (state.settings == null) state.settings = {};
           Object.assign(state.settings, clone(values.settings));
           chrome.storage.onChanged.fire(
             { settings: { oldValue, newValue: clone(state.settings) } },
@@ -257,7 +306,7 @@ export function installFakeChrome({
   };
 
   globalThis.chrome = chrome;
-  return { chrome, ...state, findTab, findGroup };
+  return { chrome, state, ...state, findTab, findGroup };
 }
 
 /** Remove a tab the way Chrome does: drop it, then fire tabs.onRemoved. */

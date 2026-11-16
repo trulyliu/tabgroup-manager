@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>标签组管理器设置</title>
+    <title data-i18n="optionsPageTitle">Tab Group Manager settings</title>
     <link rel="icon" type="image/png" href="../icons/icon32.png" />
     <link rel="stylesheet" href="options.css" />
   </head>
@@ -12,16 +12,16 @@
       <header class="page-header">
         <img class="app-icon" src="../icons/icon48.png" alt="" width="56" height="56" />
         <div class="title-block">
-          <p class="eyebrow">Chrome 扩展</p>
-          <h1>标签组管理器</h1>
-          <p class="lede">
-            按窗口整理标签页：分组优先、只展开一个分组、新标签进入当前展开的分组。
+          <p class="eyebrow" data-i18n="optionsEyebrow">Chrome extension</p>
+          <h1 data-i18n="extName">Tab Group Manager</h1>
+          <p class="lede" data-i18n="optionsLede">
+            Organizes tabs per window: groups first, one expanded group, new tabs in the expanded group.
           </p>
         </div>
         <div class="header-actions">
           <span class="version" id="version">v–</span>
           <label class="master-switch">
-            <span class="master-label">启用扩展</span>
+            <span class="master-label" data-i18n="optionsMasterSwitch">Enable extension</span>
             <input type="checkbox" id="enabled" class="switch-input" />
             <span class="switch" aria-hidden="true"></span>
           </label>
@@ -32,16 +32,16 @@
         <section class="card">
           <div class="card-head">
             <div>
-              <h2>布局规则</h2>
-              <p class="hint">自动应用在每个普通窗口。</p>
+              <h2 data-i18n="layoutHeading">Layout</h2>
+              <p class="hint" data-i18n="layoutHint">Applied automatically to every normal window.</p>
             </div>
             <span class="card-mark" aria-hidden="true"></span>
           </div>
           <div class="setting-list">
             <label class="setting">
               <span class="setting-copy">
-                <span class="setting-title">分组标签页排在最前</span>
-                <span class="setting-desc">未分组标签页排在所有分组之后。</span>
+                <span class="setting-title" data-i18n="groupsFirstTitle">Groups first</span>
+                <span class="setting-desc" data-i18n="groupsFirstDesc">Ungrouped tabs go after all groups.</span>
               </span>
               <input type="checkbox" id="groupsFirst" class="switch-input" />
               <span class="switch" aria-hidden="true"></span>
@@ -49,8 +49,10 @@
 
             <label class="setting">
               <span class="setting-copy">
-                <span class="setting-title">只展开一个分组</span>
-                <span class="setting-desc">活动标签页所在的分组保持展开，其他分组收起。</span>
+                <span class="setting-title" data-i18n="singleExpandedTitle">Expand only one group</span>
+                <span class="setting-desc" data-i18n="singleExpandedDesc">
+                  The active tab's group stays expanded; the others collapse.
+                </span>
               </span>
               <input type="checkbox" id="singleExpanded" class="switch-input" />
               <span class="switch" aria-hidden="true"></span>
@@ -58,8 +60,10 @@
 
             <label class="setting">
               <span class="setting-copy">
-                <span class="setting-title">激活固定标签页时保留展开分组</span>
-                <span class="setting-desc">关闭后，激活固定标签页会收起所有分组。</span>
+                <span class="setting-title" data-i18n="keepLastTitle">Keep a group expanded on pinned tabs</span>
+                <span class="setting-desc" data-i18n="keepLastDesc">
+                  When off, activating a pinned tab collapses every group.
+                </span>
               </span>
               <input type="checkbox" id="keepLastWhenPinned" class="switch-input" />
               <span class="switch" aria-hidden="true"></span>
@@ -70,16 +74,18 @@
         <section class="card">
           <div class="card-head">
             <div>
-              <h2>标题点击</h2>
-              <p class="hint">控制点击分组标题时的焦点变化。</p>
+              <h2 data-i18n="headerHeading">Header clicks</h2>
+              <p class="hint" data-i18n="headerHint">How focus moves when you click a group header.</p>
             </div>
             <span class="card-mark" aria-hidden="true"></span>
           </div>
           <div class="setting-list">
             <label class="setting">
               <span class="setting-copy">
-                <span class="setting-title">展开折叠的分组时切换标签页</span>
-                <span class="setting-desc">点击折叠的分组标题后，激活该分组最近使用的标签页。</span>
+                <span class="setting-title" data-i18n="expandHeaderTitle">Switch tabs when expanding a group</span>
+                <span class="setting-desc" data-i18n="expandHeaderDesc">
+                  Clicking a collapsed group's header activates its most recently used tab.
+                </span>
               </span>
               <input type="checkbox" id="expandHeaderClick" class="switch-input" />
               <span class="switch" aria-hidden="true"></span>
@@ -87,34 +93,39 @@
 
             <label class="setting setting-select">
               <span class="setting-copy">
-                <span class="setting-title">点击已展开的分组标题</span>
-                <span class="setting-desc">三种行为都不受固定标签页影响。</span>
+                <span class="setting-title" data-i18n="expandedHeaderTitle">Clicking an expanded group's header</span>
+                <span class="setting-desc" data-i18n="expandedHeaderDesc">
+                  Only with “Expand only one group” on. Pinned tabs don't affect it.
+                </span>
               </span>
               <select id="expandedGroupHeaderClick">
-                <option value="newtab">在分组内新建标签页</option>
-                <option value="collapse">收起并展开默认分组</option>
-                <option value="noaction">保持当前分组</option>
+                <option value="newtab" data-i18n="headerActionNewtab">Open a new tab in the group</option>
+                <option value="collapse" data-i18n="headerActionCollapse">Collapse it and expand the default group</option>
+                <option value="noaction" data-i18n="headerActionNoaction">Keep the current group</option>
               </select>
             </label>
           </div>
-          <p class="hint">
-            选择“收起并展开默认分组”时，点击默认分组本身不会改变分组；没有默认分组时保持当前分组。
+          <p class="hint" data-i18n="headerCollapseNote">
+            With “Collapse it and expand the default group”, clicking the default group itself changes
+            nothing; without a default group the current group stays expanded.
           </p>
         </section>
 
         <section class="card">
           <div class="card-head">
             <div>
-              <h2>新标签页</h2>
-              <p class="hint">决定新打开的标签页进入哪个分组。</p>
+              <h2 data-i18n="newTabsHeading">New tabs</h2>
+              <p class="hint" data-i18n="newTabsHint">Decides which group newly opened tabs join.</p>
             </div>
             <span class="card-mark" aria-hidden="true"></span>
           </div>
           <div class="setting-list">
             <label class="setting">
               <span class="setting-copy">
-                <span class="setting-title">默认分组</span>
-                <span class="setting-desc">未分组标签页自动进入默认分组。</span>
+                <span class="setting-title" data-i18n="defaultGroupToggleTitle">Default group</span>
+                <span class="setting-desc" data-i18n="defaultGroupToggleDesc">
+                  Ungrouped tabs join the default group automatically.
+                </span>
               </span>
               <input type="checkbox" id="defaultGroup" class="switch-input" />
               <span class="switch" aria-hidden="true"></span>
@@ -122,92 +133,106 @@
 
             <label class="setting">
               <span class="setting-copy">
-                <span class="setting-title">外部标签页进入当前分组</span>
-                <span class="setting-desc">
-                  终端或其他应用打开的新标签页按当前展开分组处理；关闭后进入默认分组。
+                <span class="setting-title" data-i18n="externalTitle">External tabs join the current group</span>
+                <span class="setting-desc" data-i18n="externalDesc">
+                  Tabs opened by a terminal or another app go to the expanded group; when off, to the
+                  default group.
                 </span>
               </span>
               <input type="checkbox" id="externalNewTabInActiveGroup" class="switch-input" />
               <span class="switch" aria-hidden="true"></span>
             </label>
           </div>
-          <p class="hint">
-            Ctrl+T 和地址栏新标签页始终进入当前展开分组；页面链接保持 Chrome 默认行为。
+          <p class="hint" data-i18n="newTabsNote">
+            Ctrl+T and address-bar new tabs always join the expanded group; links keep Chrome's default
+            behavior.
           </p>
         </section>
 
         <section class="card">
           <div class="card-head">
             <div>
-              <h2>默认分组</h2>
-              <p class="hint">未分组标签页的归宿。</p>
+              <h2 data-i18n="defaultGroupHeading">Default group</h2>
+              <p class="hint" data-i18n="defaultGroupHint">Where ungrouped tabs go.</p>
             </div>
             <span class="card-mark" aria-hidden="true"></span>
           </div>
           <div class="field-grid">
             <label class="field">
-              <span>名称</span>
+              <span data-i18n="defaultGroupNameLabel">Name</span>
               <input type="text" id="defaultGroupTitle" maxlength="30" />
             </label>
             <label class="field">
-              <span>颜色</span>
+              <span data-i18n="defaultGroupColorLabel">Color</span>
               <select id="defaultGroupColor"></select>
             </label>
           </div>
-          <p class="hint">修改名称或颜色时，现有默认分组会同步重命名。</p>
+          <p class="hint" data-i18n="defaultGroupNote">
+            Changing the name or color renames the existing default group too.
+          </p>
         </section>
 
         <section class="card wide">
           <div class="card-head">
             <div>
-              <h2>快捷键</h2>
-              <p class="hint">随时回到默认分组。</p>
+              <h2 data-i18n="shortcutHeading">Keyboard shortcut</h2>
+              <p class="hint" data-i18n="shortcutHint">Jump back to the default group at any time.</p>
             </div>
             <span class="card-mark" aria-hidden="true"></span>
           </div>
           <div class="shortcut-display">
             <div class="shortcut-copy">
-              <span class="shortcut-label">切换到默认分组</span>
-              <kbd id="defaultGroupShortcut">读取中…</kbd>
+              <span class="shortcut-label" data-i18n="commandSwitchToDefault">Switch to the default group</span>
+              <kbd id="defaultGroupShortcut" data-i18n="shortcutLoading">Loading…</kbd>
             </div>
-            <button type="button" id="changeShortcutButton">更改</button>
+            <button type="button" id="changeShortcutButton" data-i18n="shortcutChange">Change</button>
           </div>
           <p class="hint">
-            Chrome 不允许扩展直接修改快捷键；点击“更改”会打开 Chrome 的扩展快捷键页面。
-            默认建议 <code>Alt+W</code>。
+            <span data-i18n="shortcutNote">
+              Chrome doesn't let extensions change shortcuts directly; “Change” opens Chrome's extension
+              shortcuts page. Suggested default:
+            </span>
+            <code>Alt+W</code>
           </p>
         </section>
 
         <section class="card wide">
           <div class="card-head">
             <div>
-              <h2>钉住的分组</h2>
-              <p class="hint">按标题和颜色识别；同标题同色的分组会一起钉住。列表顺序即标签栏顺序。</p>
+              <h2 data-i18n="pinnedHeading">Pinned groups</h2>
+              <p class="hint" data-i18n="pinnedHint">
+                Matched by title and color; groups with the same title and color are pinned together. List
+                order is tab strip order.
+              </p>
             </div>
             <span class="card-mark" aria-hidden="true"></span>
           </div>
           <ul id="pinnedList" class="pin-list"></ul>
-          <p id="emptyPinned" class="hint">还没有钉住的分组。</p>
+          <p id="emptyPinned" class="hint" data-i18n="pinnedEmpty">No pinned groups yet.</p>
           <div class="pin-controls">
-            <select id="openGroups" aria-label="当前打开的分组"></select>
-            <button type="button" id="pinButton">钉住</button>
+            <select id="openGroups" aria-label="Open groups" data-i18n-attr="aria-label:pinnedOpenGroupsLabel"></select>
+            <button type="button" id="pinButton" data-i18n="pinButton">Pin</button>
           </div>
-          <p class="hint">
-            Chrome 不提供禁止删除分组的 API。钉住通过“始终保持非空”实现：最后一个标签页关闭后，
-            扩展会用同标题、同颜色的分组重建一个未激活的空白新标签页。真实标签页不会被重新打开。
+          <p class="hint" data-i18n="pinnedNoteProtection">
+            Chrome has no API to prevent deleting a group, so pinning keeps it from becoming empty: after
+            its last tab closes, the extension recreates a group with the same title and color holding one
+            inactive blank tab. Your real tabs are never reopened.
           </p>
-          <p class="hint">
-            钉住顺序始终生效；由于排序会把所有分组放到未分组标签页之前，因此钉住顺序同时意味着“分组在前”。
+          <p class="hint" data-i18n="pinnedNoteOrder">
+            Pinned order always applies. Because sorting puts every group before ungrouped tabs, pinning
+            also implies “groups first”.
           </p>
         </section>
       </div>
 
       <footer class="toolbar">
         <div class="toolbar-copy">
-          <h2>立即整理</h2>
-          <p class="hint">重新应用分组排序、默认分组和单展开规则。</p>
+          <h2 data-i18n="tidyHeading">Tidy up now</h2>
+          <p class="hint" data-i18n="tidyHint">
+            Re-apply group order, the default group and single-expanded rules.
+          </p>
         </div>
-        <button type="button" id="normalizeButton">整理所有窗口</button>
+        <button type="button" id="normalizeButton" data-i18n="tidyButton">Tidy all windows</button>
         <span id="status" class="status" role="status"></span>
       </footer>
     </main>

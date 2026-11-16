@@ -15,7 +15,12 @@ export const GROUP_COLORS = Object.freeze([
 const COLOR_SET = new Set(GROUP_COLORS);
 const MAX_TITLE_LENGTH = 30;
 const MAX_PINNED_GROUPS = 50;
-const FALLBACK_DEFAULT_TITLE = "其他";
+// The default group title follows the browser UI language (_locales/*/
+// messages.json "defaultGroupTitle"); outside Chrome, or if the message is
+// missing, it is the default_locale (en) value.
+const FALLBACK_DEFAULT_TITLE = "Other";
+/** The only default title before the UI was localized (<= 0.3.x). */
+const LEGACY_DEFAULT_TITLE = "\u5176\u4ed6";
 
 export const HEADER_CLICK_ACTIONS = Object.freeze(["newtab", "collapse", "noaction"]);
 
@@ -76,7 +81,7 @@ export function normalizeSettings(stored) {
       : raw.collapseExpandedOnHeaderClick === false
         ? "noaction"
         : "collapse",
-    defaultGroupTitle: clampTitle(merged.defaultGroupTitle) || FALLBACK_DEFAULT_TITLE,
+    defaultGroupTitle: clampTitle(raw.defaultGroupTitle) || localizedDefaultTitle(),
     defaultGroupColor: normalizeColor(merged.defaultGroupColor),
     pinnedGroups: sanitizePinnedGroups(merged.pinnedGroups),
   };
@@ -96,4 +101,15 @@ export async function saveSettings(patch) {
   return { oldSettings, newSettings };
 }
 
-export { FALLBACK_DEFAULT_TITLE, MAX_TITLE_LENGTH, MAX_PINNED_GROUPS };
+/** Default group title for the current browser UI language. */
+export function localizedDefaultTitle() {
+  try {
+    const title = clampTitle(globalThis.chrome?.i18n?.getMessage?.("defaultGroupTitle"));
+    if (title) return title;
+  } catch {
+    // Not running inside an extension context.
+  }
+  return FALLBACK_DEFAULT_TITLE;
+}
+
+export { FALLBACK_DEFAULT_TITLE, LEGACY_DEFAULT_TITLE, MAX_TITLE_LENGTH, MAX_PINNED_GROUPS };

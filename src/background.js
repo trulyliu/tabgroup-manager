@@ -22,7 +22,13 @@ import {
   planNewTabTarget,
 } from "./lib/layout.js";
 import { choosePinnedRestore, isPinnedGroup } from "./lib/pinned.js";
-import { loadSettings, normalizeSettings, saveSettings } from "./lib/settings.js";
+import {
+  LEGACY_DEFAULT_TITLE,
+  loadSettings,
+  localizedDefaultTitle,
+  normalizeSettings,
+  saveSettings,
+} from "./lib/settings.js";
 
 const QUIET_MS = 1500;
 const MAX_BOOT_MS = 30000;
@@ -48,6 +54,8 @@ const errorText = (err) => String(err?.message ?? err ?? "");
 const sortTabs = (tabs) =>
   tabs.slice().sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 const pinnedKey = (title, color) => `${title}\u0000${color}`;
+/** Localized UI string (shown on the options page via save-settings errors). */
+const msg = (key, substitutions) => chrome.i18n?.getMessage?.(key, substitutions) || key;
 
 let ready = false;
 let bootPromise = null;
@@ -1722,7 +1730,7 @@ async function assertDefaultTitleIsFree(oldSettings, title) {
       group.id !== defaultGroupByWindow.get(group.windowId),
   );
   if (clash) {
-    throw new Error(`已有名为“${title}”的分组，请换一个默认分组标题`);
+    throw new Error(msg("errorDefaultTitleTaken", [title]));
   }
 }
 
@@ -1816,6 +1824,31 @@ async function restoreState() {
   return true;
 }
 
+/**
+ * Fix the default group title the first time the extension runs, so it does
+ * not change later with the browser language or across synced devices. The
+ * title comes from the UI language, except that a user upgrading from a
+ * pre-localization version keeps the old LEGACY_DEFAULT_TITLE if such a group is
+ * open (their settings may never have been saved, so nothing else records it).
+ */
+async function persistDefaultTitle() {
+  try {
+    const { settings: stored } = await chrome.storage.sync.get("settings");
+    const storedTitle = stored?.defaultGroupTitle;
+    if (typeof storedTitle === "string" && storedTitle.trim() !== "") return;
+
+    let title = localizedDefaultTitle();
+    if (title !== LEGACY_DEFAULT_TITLE) {
+      const groups = await chrome.tabGroups.query({});
+      if (groups.some((group) => group.title === LEGACY_DEFAULT_TITLE)) title = LEGACY_DEFAULT_TITLE;
+    }
+    const { newSettings } = await saveSettings({ defaultGroupTitle: title });
+    currentSettings = newSettings;
+  } catch (err) {
+    console.warn("[gtm] default title setup failed", errorText(err));
+  }
+}
+
 async function boot() {
   if (bootPromise) return bootPromise;
   bootPromise = (async () => {
@@ -1841,6 +1874,8 @@ async function boot() {
       warmupUntil = Date.now() + WARMUP_MS;
     }
 
+    // After the quiet gate, so Chrome has restored the session's groups.
+    await persistDefaultTitle();
     ready = true;
     dropDeferredEvents = false;
     // Replay the events that woke the worker against the restored state before

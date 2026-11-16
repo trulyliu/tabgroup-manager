@@ -1,4 +1,7 @@
+import { localizePage, t } from "./i18n.js";
 import { loadSettings } from "./lib/settings.js";
+
+localizePage();
 
 const els = {
   enabled: document.getElementById("enabled"),
@@ -32,7 +35,7 @@ async function render() {
   const group =
     current.groupId !== -1 ? groups.find((entry) => entry.id === current.groupId) : null;
   els.groupCount.textContent = String(groups.length);
-  els.activeGroup.textContent = group ? group.title || "未命名" : "无";
+  els.activeGroup.textContent = group ? group.title || t("groupUntitled") : t("groupNone");
 }
 
 els.enabled.addEventListener("change", async () => {
@@ -41,8 +44,8 @@ els.enabled.addEventListener("change", async () => {
       type: "save-settings",
       patch: { enabled: els.enabled.checked },
     });
-    if (!response?.ok) throw new Error(response?.error ?? "保存失败");
-    setStatus(els.enabled.checked ? "已启用" : "已停用");
+    if (!response?.ok) throw new Error(response?.error ?? t("errorSaveFailed"));
+    setStatus(els.enabled.checked ? t("statusEnabled") : t("statusDisabled"));
   } catch (err) {
     setStatus(String(err?.message ?? err), true);
   }
@@ -52,8 +55,8 @@ els.normalizeButton.addEventListener("click", async () => {
   els.normalizeButton.disabled = true;
   try {
     const response = await chrome.runtime.sendMessage({ type: "normalize-all-windows" });
-    if (!response?.ok) throw new Error(response?.error ?? "整理失败");
-    setStatus("已整理");
+    if (!response?.ok) throw new Error(response?.error ?? t("errorTidyFailed"));
+    setStatus(t("statusTidied"));
     await render();
   } catch (err) {
     setStatus(String(err?.message ?? err), true);

@@ -1,16 +1,7 @@
+import { colorLabel, localizePage, t } from "./i18n.js";
 import { GROUP_COLORS, loadSettings } from "./lib/settings.js";
 
-const COLOR_LABELS = {
-  grey: "灰色",
-  blue: "蓝色",
-  red: "红色",
-  yellow: "黄色",
-  green: "绿色",
-  pink: "粉色",
-  purple: "紫色",
-  cyan: "青色",
-  orange: "橙色",
-};
+localizePage();
 
 const CHECKBOX_KEYS = [
   "enabled",
@@ -53,8 +44,8 @@ function setStatus(text, isError = false) {
 async function savePatch(patch) {
   try {
     const response = await chrome.runtime.sendMessage({ type: "save-settings", patch });
-    if (!response?.ok) throw new Error(response?.error ?? "保存失败");
-    setStatus("已保存");
+    if (!response?.ok) throw new Error(response?.error ?? t("errorSaveFailed"));
+    setStatus(t("statusSaved"));
     await refresh();
   } catch (err) {
     setStatus(String(err?.message ?? err), true);
@@ -67,7 +58,7 @@ function buildColorOptions() {
   for (const color of GROUP_COLORS) {
     const option = document.createElement("option");
     option.value = color;
-    option.textContent = COLOR_LABELS[color];
+    option.textContent = colorLabel(color);
     els.defaultGroupColor.append(option);
   }
 }
@@ -110,10 +101,10 @@ function pinnedRow(entry, index, pinnedGroups, byKey) {
   const meta = document.createElement("span");
   meta.className = "pin-meta";
   if (!live) {
-    meta.textContent = "未打开";
+    meta.textContent = t("pinnedNotOpen");
     meta.classList.add("warn");
   } else if (live.count > 1) {
-    meta.textContent = `同标题同色分组会一起钉住（${live.count} 个）`;
+    meta.textContent = t("pinnedSharedCount", [String(live.count)]);
   }
   row.append(meta);
 
@@ -123,7 +114,8 @@ function pinnedRow(entry, index, pinnedGroups, byKey) {
   const up = document.createElement("button");
   up.type = "button";
   up.textContent = "↑";
-  up.title = "上移";
+  up.title = t("pinMoveUp");
+  up.setAttribute("aria-label", up.title);
   up.disabled = index === 0;
   up.addEventListener("click", () => {
     const next = pinnedGroups.slice();
@@ -135,7 +127,8 @@ function pinnedRow(entry, index, pinnedGroups, byKey) {
   const down = document.createElement("button");
   down.type = "button";
   down.textContent = "↓";
-  down.title = "下移";
+  down.title = t("pinMoveDown");
+  down.setAttribute("aria-label", down.title);
   down.disabled = index === pinnedGroups.length - 1;
   down.addEventListener("click", () => {
     const next = pinnedGroups.slice();
@@ -147,7 +140,7 @@ function pinnedRow(entry, index, pinnedGroups, byKey) {
   const unpin = document.createElement("button");
   unpin.type = "button";
   unpin.className = "unpin";
-  unpin.textContent = "取消钉住";
+  unpin.textContent = t("unpin");
   unpin.addEventListener("click", () => {
     const next = pinnedGroups.filter((_, entryIndex) => entryIndex !== index);
     void savePatch({ pinnedGroups: next });
@@ -183,16 +176,16 @@ async function renderPinned(settings) {
     option.value = key;
     option.dataset.title = info.title;
     option.dataset.color = info.color;
-    const colorLabel = COLOR_LABELS[info.color] ?? info.color;
+    const color = colorLabel(info.color);
     option.textContent =
       info.count > 1
-        ? `${info.title}（${colorLabel}，${info.count} 个）`
-        : `${info.title}（${colorLabel}）`;
+        ? t("pinOptionLabelCount", [info.title, color, String(info.count)])
+        : t("pinOptionLabel", [info.title, color]);
     options.push(option);
   }
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = options.length ? "选择要钉住的分组…" : "没有可钉住的有名分组";
+  placeholder.textContent = options.length ? t("pinSelectPlaceholder") : t("pinNoCandidates");
   els.openGroups.replaceChildren(placeholder, ...options);
   els.pinButton.disabled = options.length === 0;
 
@@ -210,9 +203,9 @@ async function renderShortcut() {
   try {
     const commands = await chrome.commands.getAll();
     const command = commands.find((entry) => entry.name === "switch-to-default-group");
-    els.defaultGroupShortcut.textContent = command?.shortcut || "未设置";
+    els.defaultGroupShortcut.textContent = command?.shortcut || t("shortcutUnset");
   } catch (err) {
-    els.defaultGroupShortcut.textContent = "不可用";
+    els.defaultGroupShortcut.textContent = t("shortcutUnavailable");
     setStatus(String(err?.message ?? err), true);
   }
 }
@@ -243,7 +236,7 @@ els.defaultGroupColor.addEventListener("change", () => {
 
 els.changeShortcutButton.addEventListener("click", () => {
   void chrome.tabs.create({ url: "chrome://extensions/shortcuts" }).catch((err) => {
-    setStatus("请手动打开 chrome://extensions/shortcuts", true);
+    setStatus(t("shortcutOpenManually"), true);
     console.warn("[gtm] open shortcuts failed", err);
   });
 });
@@ -251,8 +244,8 @@ els.normalizeButton.addEventListener("click", async () => {
   els.normalizeButton.disabled = true;
   try {
     const response = await chrome.runtime.sendMessage({ type: "normalize-all-windows" });
-    if (!response?.ok) throw new Error(response?.error ?? "整理失败");
-    setStatus("已整理所有窗口");
+    if (!response?.ok) throw new Error(response?.error ?? t("errorTidyFailed"));
+    setStatus(t("statusTidiedAll"));
     await refresh();
   } catch (err) {
     setStatus(String(err?.message ?? err), true);

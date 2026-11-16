@@ -1,9 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Tab Group Manager",
+  "name": "__MSG_extName__",
   "version": "0.3.2",
   "minimum_chrome_version": "124",
-  "description": "Groups first, one expanded group, new tabs in the active group",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
+  "homepage_url": "https://github.com/trulyliu/tabgroup-manager",
   "permissions": [
     "tabs",
     "tabGroups",
@@ -14,7 +16,7 @@
       "suggested_key": {
         "default": "Alt+W"
       },
-      "description": "切换到默认分组"
+      "description": "__MSG_commandSwitchToDefault__"
     }
   },
   "background": {
@@ -27,7 +29,7 @@
   },
   "action": {
     "default_popup": "src/popup.html",
-    "default_title": "Tab Group Manager",
+    "default_title": "__MSG_extName__",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

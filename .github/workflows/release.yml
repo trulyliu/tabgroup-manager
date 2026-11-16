@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           zip="${{ steps.version.outputs.zip }}"
-          zip -r "$zip" manifest.json src icons README.md CHANGELOG.md
+          zip -r "$zip" manifest.json src _locales icons README.md README.en.md CHANGELOG.md
           sha256sum "$zip" > "$zip.sha256"
           unzip -l "$zip"
 
