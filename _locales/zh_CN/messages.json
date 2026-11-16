@@ -150,7 +150,7 @@
     "description": "Setting title."
   },
   "expandedHeaderDesc": {
-    "message": "仅在开启“只展开一个分组”时生效，不受固定标签页影响。",
+    "message": "三种行为都不受固定标签页影响。",
     "description": "Setting description."
   },
   "headerActionNewtab": {

@@ -56,3 +56,42 @@ test("collapse: collapsing a group does not pull focus to the default group", as
   assert.equal(findTab(4).active, true);
   assert.deepEqual(calls.sequence, []);
 });
+
+test("collapse: clicking the active default group header keeps it expanded and discards placeholder tabs", async () => {
+  // Focus the default group (tab 1) and expand it
+  findGroup(100).collapsed = false;
+  findGroup(300).collapsed = true;
+  chrome.tabGroups.onUpdated.fire(clone(findGroup(100)));
+  await chrome.tabs.update(1, { active: true });
+  chrome.tabs.onActivated.fire({ tabId: 1, windowId: 1 });
+  await sleep(200);
+
+  // User clicks default group header to collapse it.
+  // Chrome collapses the group and creates a placeholder tab because tab 1 was active:
+  findGroup(100).collapsed = true;
+  const placeholder = {
+    id: 99,
+    windowId: 1,
+    index: env.tabs.length,
+    groupId: -1,
+    pinned: false,
+    active: true,
+    lastAccessed: Date.now(),
+    url: "",
+    pendingUrl: "chrome://newtab/",
+    openerTabId: 1,
+  };
+  env.tabs.push(placeholder);
+  findTab(1).active = false;
+
+  chrome.tabGroups.onUpdated.fire(clone(findGroup(100)));
+  chrome.tabs.onCreated.fire(clone(placeholder));
+  chrome.tabs.onActivated.fire({ tabId: 99, windowId: 1 });
+
+  await sleep(600);
+
+  // Group 100 stays expanded with tab 1 active, and placeholder tab 99 is removed
+  assert.equal(findGroup(100).collapsed, false, "default group remains expanded");
+  assert.equal(findTab(1).active, true, "tab 1 restored as active");
+  assert.equal(env.tabs.some((t) => t.id === 99), false, "placeholder tab was discarded");
+});

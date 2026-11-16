@@ -148,7 +148,7 @@ flowchart LR
 - `collapse` 只在默认组有标签页时生效；空组不存在，因此“有默认组”即“默认组有标签页”。
 - `newtab` 复用 Chrome 的占位页，没有占位页时才新建组内 NTP；`collapse` / `noaction` 在切换焦点后关闭占位页。
 - `keepLastWhenPinned` 只影响普通激活固定标签页，不影响上述三种点击行为。活动标签页未分组且**未固定**（典型是正在分类的 Ctrl+T 新标签页）时，`fallbackGroupId` 一律使用 remembered 分组；keepLast 关闭时只是不再猜 MRU。
-- 三种点击行为只在 `singleExpanded` 开启时触发；关闭时多个分组可同时展开，折叠任意分组都是普通折叠。
+- 三种点击行为只在折叠活动分组时触发（在 `singleExpanded` 开启时，展开的分组总是活动分组）；`singleExpanded` 关闭时，折叠非活动分组为普通折叠，折叠活动分组仍执行所选行为。
 - `expandHeaderClick` 只影响点击**折叠**分组标题，不影响已展开分组。
 
 标题点击期间的闪烁防护：

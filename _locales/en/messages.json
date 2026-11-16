@@ -150,7 +150,7 @@
     "description": "Setting title."
   },
   "expandedHeaderDesc": {
-    "message": "Only with “Expand only one group” on. Pinned tabs don't affect it.",
+    "message": "None of the three actions are affected by pinned tabs.",
     "description": "Setting description."
   },
   "headerActionNewtab": {

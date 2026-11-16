@@ -1170,6 +1170,19 @@ async function captureCollapse(group) {
     groupId: group.id,
     now: Date.now(),
   });
+
+  // When singleExpanded is off, collapsing an inactive group in the background
+  // is just a normal collapse and must not trigger header-click actions.
+  if (!currentSettings.singleExpanded) {
+    const activeTab = tabs.find((entry) => entry.active) ?? null;
+    const isGroupActive =
+      replacementId != null ||
+      (activeTab != null && activeTab.groupId === group.id) ||
+      (lastActiveGroupByWindow.get(group.windowId) === group.id &&
+        (activeTab == null || activeTab.pinned || activeTab.groupId === TAB_GROUP_ID_NONE));
+    if (!isGroupActive) return null;
+  }
+
   return { tabs, groups, live, replacementId };
 }
 
@@ -1381,14 +1394,7 @@ async function handleGroupUpdated(group) {
   rememberCollapsed(group);
   if (!ready || !currentSettings.enabled) return;
 
-  // The expanded-header actions are part of the single-expanded model. With it
-  // off several groups are open at once and collapsing one is just a collapse.
-  if (
-    currentSettings.singleExpanded &&
-    previous === false &&
-    group.collapsed === true &&
-    Date.now() >= warmupUntil
-  ) {
+  if (previous === false && group.collapsed === true && Date.now() >= warmupUntil) {
     const action = currentSettings.expandedGroupHeaderClick;
     const until = Date.now() + HEADER_ACTION_TTL_MS;
     headerActionUntil.set(group.windowId, until);

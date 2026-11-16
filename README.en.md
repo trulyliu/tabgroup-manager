@@ -39,7 +39,7 @@ If session restore leaves multiple groups with the default title, normalization 
 
 Activating any tab inside a group expands that group and collapses all others. When `expandHeaderClick` is enabled, clicking a collapsed group's header switches to its most recently used tab, expanding it and collapsing the rest.
 
-Clicking an **already expanded** group header triggers the configured `expandedGroupHeaderClick` action (only active when `singleExpanded` is enabled):
+Clicking an **already expanded** group header triggers the configured `expandedGroupHeaderClick` action (not affected by pinned tabs; when `singleExpanded` is off, collapsing an inactive group is a normal collapse while collapsing the active group triggers the action):
 
 - `newtab`: Opens a new tab within the clicked group and keeps it expanded. Reuses Chrome's placeholder tab if one was created during the click.
 - `collapse`: Collapses the clicked group, expands the default group, and focuses its most recently used tab (clicking the default group itself keeps it expanded).

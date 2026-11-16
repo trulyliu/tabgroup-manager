@@ -150,7 +150,7 @@
     "description": "Setting title."
   },
   "expandedHeaderDesc": {
-    "message": "僅在開啟「只展開一個群組」時生效，不受固定分頁影響。",
+    "message": "三種行為均不受固定分頁影響。",
     "description": "Setting description."
   },
   "headerActionNewtab": {
