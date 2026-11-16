@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.1] - 2026-11-16
+
+### Changed
+
+- 重新发布 0.2.0 的内容。版本号递增以重新触发 tag 发布工作流；扩展行为无变更。
+
 ## [0.2.0] - 2026-11-16
 
 ### Added

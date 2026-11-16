@@ -156,8 +156,8 @@ test/*.test.js         纯逻辑单元测试 + 后台事件接线测试（fake c
 版本号以 `manifest.json` 为准，并与 `CHANGELOG.md` 同步更新。发布使用 `v<version>` 标签：
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 `.github/workflows/release.yml` 会运行 `npm test`、校验标签与清单版本、打包 `tabgroup-manager-<version>.zip`（含 `manifest.json`、`src/`、`icons/`、README、CHANGELOG），并创建或更新 GitHub Release 资源。
