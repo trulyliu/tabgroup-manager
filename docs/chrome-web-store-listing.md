@@ -12,7 +12,7 @@
 | **简短描述** (≤ 132 字符) | Keeps tab groups first, one group expanded, and new tabs in the group you are using. | 分组优先、只展开一个分组、新标签页进入当前分组，让标签栏井然有序。 |
 | **主要分类** | Productivity (生产力) / Workflow & Planning | 生产力 / 工作流与规划 |
 | **默认语言** | English (en) | 支持中文 (zh_CN, zh_TW) |
-| **版本号** | `0.3.2` | `0.3.2` |
+| **版本号** | `0.4.0` | `0.4.0` |
 
 ---
 
@@ -124,7 +124,7 @@ Chrome 应用商店提交时需要以下视觉素材：
 1. **打包 ZIP**：
    运行 GitHub Actions Release 工作流，或在本地根目录运行：
    ```bash
-   zip -r tabgroup-manager-0.3.2.zip manifest.json src _locales icons README.md README.en.md CHANGELOG.md
+   zip -r tabgroup-manager-0.4.0.zip manifest.json src _locales icons README.md README.en.md CHANGELOG.md
    ```
 2. **进入 Chrome Web Store 开发者后台**：
    访问 [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole/)。

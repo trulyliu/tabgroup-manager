@@ -176,8 +176,8 @@ test/fake-chrome.js    后台测试共享的 fake chrome API
 版本号以 `manifest.json` 为准，并与 `CHANGELOG.md` 同步更新。发布使用 `v<version>` 标签：
 
 ```bash
-git tag v0.3.2
-git push origin v0.3.2
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 `.github/workflows/release.yml` 会运行 `npm test`、校验标签与清单版本、打包 `tabgroup-manager-<version>.zip`（含 `manifest.json`、`src/`、`icons/`、README、CHANGELOG），并创建或更新 GitHub Release 资源。

@@ -4,6 +4,18 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] - 2026-11-17
+
+### Added
+
+- 多语言国际化（i18n）支持：扩展清单、选项页与弹出窗口完整支持英文（en）、简体中文（zh_CN）、繁体中文（zh_TW），并在测试套件中加入 i18n 完整性与无硬编码校验。
+- 英文使用文档 [README.en.md](README.en.md)。
+- Chrome 应用商店上架物料与清单指南 [docs/chrome-web-store-listing.md](docs/chrome-web-store-listing.md)。
+
+### Fixed
+
+- 修复在未勾选“只展开一个分组”且“点击已展开分组标题”设置为收起并回到默认分组（collapse）时，点击当前已是默认分组的标题会导致多建一个空白标签页的问题。
+
 ## [0.3.2] - 2026-11-16
 
 ### Fixed
