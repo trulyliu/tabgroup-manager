@@ -17,6 +17,7 @@ import {
   isUngroupedTab,
   pickGroupTab,
   planCollapse,
+  planDefaultGroupMerge,
   planGroupOrder,
   planNewTabTarget,
 } from "./lib/layout.js";
@@ -39,6 +40,7 @@ const SELF_UPDATE_TTL_MS = 2000;
 const CLOSING_WINDOW_TTL_MS = 5000;
 const RETRY_LIMIT = 3;
 const HEADER_ACTION_TTL_MS = 2000;
+const MERGED_AWAY_TTL_MS = 10000;
 const DRAG_ERROR = /dragging|not editable/i;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,6 +76,8 @@ const headerActivationUntil = new Map();
 const headerActionUntil = new Map();
 
 const pinnedSnapshots = new Map();
+/** Groups emptied by our own duplicate-default merge; do not resurrect them. */
+const mergedAwayGroups = new Map();
 let snapshotTimer = null;
 let snapshotWrites = Promise.resolve();
 
@@ -143,6 +147,20 @@ function isClosingWindow(windowId) {
   if (at == null) return false;
   if (at < Date.now()) {
     closingWindows.delete(windowId);
+    return false;
+  }
+  return true;
+}
+
+function markMergedAway(groupId) {
+  mergedAwayGroups.set(groupId, Date.now() + MERGED_AWAY_TTL_MS);
+}
+
+function isMergedAway(groupId) {
+  const at = mergedAwayGroups.get(groupId);
+  if (at == null) return false;
+  if (at < Date.now()) {
+    mergedAwayGroups.delete(groupId);
     return false;
   }
   return true;
@@ -247,6 +265,10 @@ async function normalizeWindow(windowId) {
   if (!isNormalWindowType(win)) return;
 
   let retry = false;
+  // Duplicate detection is a repair, not routing: run it even when new tabs no
+  // longer auto-join the default group, otherwise an existing duplicate pair
+  // stays undeletable forever.
+  retry = (await mergeDuplicateDefaultGroups(windowId, settings)) || retry;
   if (settings.defaultGroup) {
     retry = (await ensureDefaultGroup(windowId, settings)) || retry;
   }
@@ -283,6 +305,56 @@ async function addTabsToGroup(tabIds, groupId) {
     }
   }
   return retry || added === 0;
+}
+
+/**
+ * Chrome can restore the saved default group after the extension already
+ * created a new one for an externally opened tab, leaving two groups with the
+ * same title (and, when pinned, two protected groups that cannot be removed).
+ * Merge every duplicate into the canonical group before any other pass.
+ */
+async function mergeDuplicateDefaultGroups(windowId, settings) {
+  let tabs = [];
+  let groups = [];
+  try {
+    [tabs, groups] = await Promise.all([
+      chrome.tabs.query({ windowId }),
+      chrome.tabGroups.query({ windowId }),
+    ]);
+  } catch {
+    return false;
+  }
+  const plan = planDefaultGroupMerge({
+    tabs,
+    groups,
+    title: settings.defaultGroupTitle,
+    rememberedId: defaultGroupByWindow.get(windowId) ?? null,
+  });
+  if (!plan) return false;
+
+  console.info(
+    "[gtm] merging duplicate default groups",
+    windowId,
+    plan.sources.map((source) => source.groupId).join(","),
+    "->",
+    plan.canonicalId,
+  );
+  defaultGroupByWindow.set(windowId, plan.canonicalId);
+  if (lastActiveGroupByWindow.get(windowId) != null) {
+    const activeId = lastActiveGroupByWindow.get(windowId);
+    if (plan.sources.some((source) => source.groupId === activeId)) {
+      lastActiveGroupByWindow.set(windowId, plan.canonicalId);
+    }
+  }
+
+  let retry = false;
+  for (const source of plan.sources) {
+    // The merge empties the source group; Chrome then removes it. Pinned-group
+    // protection must not read that as a deleted group and recreate it.
+    markMergedAway(source.groupId);
+    retry = (await addTabsToGroup(source.tabIds, plan.canonicalId)) || retry;
+  }
+  return retry;
 }
 
 async function ensureDefaultGroup(windowId, settings) {
@@ -531,6 +603,10 @@ function handleGroupRemoved(group) {
   headerActivationUntil.delete(group.id);
   recentGroupCreations.delete(group.id);
 
+  // This group was emptied by mergeDuplicateDefaultGroups; the canonical group
+  // already holds its tabs, so pinned protection must not recreate it.
+  if (isMergedAway(group.id)) return;
+
   if (!ready || !currentSettings.enabled) return;
   if (!isPinnedGroup(currentSettings.pinnedGroups, group.title, group.color)) return;
   if (!isNormalGroupTitle(group.title)) return;
@@ -543,6 +619,7 @@ function handleGroupRemoved(group) {
   }
   const snapshot = {
     windowId: group.windowId,
+    groupId: group.id,
     title: group.title,
     color: group.color,
     collapsed: group.collapsed,
@@ -651,6 +728,22 @@ async function attemptPinnedRestore(snapshot, attempt) {
     }
   }
 
+  // The window already has a live group with the default title: this removal
+  // is a duplicate cleanup (ours or the user's). Recreating the group would
+  // immediately undo the normalization.
+  const duplicateDefault =
+    snapshot.title === currentSettings.defaultGroupTitle &&
+    groups.some(
+      (entry) =>
+        entry.windowId === snapshot.windowId &&
+        entry.id !== snapshot.groupId &&
+        entry.title === snapshot.title,
+    );
+  if (duplicateDefault) {
+    for (const tab of alive) schedule(tab.windowId);
+    return "done";
+  }
+
   const decision = choosePinnedRestore({
     aliveTabs: alive,
     snapshot,
@@ -689,7 +782,9 @@ async function attemptPinnedRestore(snapshot, attempt) {
   }
   if (groupId == null) return "done";
 
-  defaultGroupByWindow.delete(snapshot.windowId);
+  if (snapshot.title === currentSettings.defaultGroupTitle) {
+    defaultGroupByWindow.set(snapshot.windowId, groupId);
+  }
   collapsedStates.set(groupId, false);
   await updateGroupPresentation(groupId, {
     title: snapshot.title,
@@ -1431,19 +1526,21 @@ async function renameDefaultGroups(oldSettings, newSettings) {
     } catch {
       continue;
     }
-    const target = findDefaultGroup(groups, {
-      title: oldSettings.defaultGroupTitle,
-      rememberedId: defaultGroupByWindow.get(win.id) ?? null,
-    });
-    if (!target) continue;
-    try {
-      await updateGroupPresentation(target.id, {
-        title: newSettings.defaultGroupTitle,
-        color: newSettings.defaultGroupColor,
-      });
-      defaultGroupByWindow.set(win.id, target.id);
-    } catch {
-      // Group vanished mid-rename.
+    const targets = groups.filter(
+      (group) =>
+        group.title === oldSettings.defaultGroupTitle ||
+        group.id === defaultGroupByWindow.get(win.id),
+    );
+    for (const target of targets) {
+      try {
+        await updateGroupPresentation(target.id, {
+          title: newSettings.defaultGroupTitle,
+          color: newSettings.defaultGroupColor,
+        });
+        defaultGroupByWindow.set(win.id, target.id);
+      } catch {
+        // Group vanished mid-rename.
+      }
     }
   }
 }

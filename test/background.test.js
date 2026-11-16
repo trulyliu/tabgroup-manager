@@ -697,3 +697,115 @@ test("switch-to-default-group command focuses the default group MRU", async () =
   assert.equal(findGroup(alpha.id).collapsed, true);
   assert.equal(findGroup(defaultGroup.id).collapsed, false);
 });
+
+test("duplicate default groups are merged and the emptied group is not restored", async () => {
+  await chrome.storage.sync.set({
+    settings: {
+      ...settings,
+      enabled: true,
+      defaultGroup: true,
+      defaultGroupTitle: "其他",
+      defaultGroupColor: "grey",
+      expandedGroupHeaderClick: "collapse",
+      pinnedGroups: [{ title: "其他", color: "grey" }],
+    },
+  });
+  await sleep(350);
+  // Crash restore: Chrome re-creates the saved default group after the
+  // extension already made one for an externally opened tab.
+  groups.push({ id: 700, windowId: 1, title: "其他", color: "grey", collapsed: false });
+  tabs.push({
+    id: 1200,
+    windowId: 1,
+    index: tabs.length,
+    groupId: 700,
+    pinned: false,
+    active: false,
+    lastAccessed: Date.now(),
+    url: "https://example.com/restored",
+  });
+  await chrome.storage.sync.set({ settings: { ...settings } });
+  await sleep(500);
+  const defaultTabGroups = new Set(
+    tabs
+      .filter((tab) => groups.some((group) => group.id === tab.groupId && group.title === "其他"))
+      .map((tab) => tab.groupId),
+  );
+  assert.equal(defaultTabGroups.size, 1, "all default-group tabs share one group");
+  assert.equal(findTab(1200).groupId, [...defaultTabGroups][0]);
+
+  // Chrome removes the emptied duplicate; pinned protection must not restore it.
+  const canonicalId = [...defaultTabGroups][0];
+  const emptied = groups.find(
+    (group) =>
+      group.id !== canonicalId &&
+      group.title === "其他" &&
+      !tabs.some((tab) => tab.groupId === group.id),
+  );
+  assert.ok(emptied, "the duplicate should have been emptied by the merge");
+  calls.create.length = 0;
+  const before = groups.length;
+  groups.splice(groups.indexOf(emptied), 1);
+  chrome.tabGroups.onRemoved.fire(clone({ ...emptied, id: emptied.id }));
+  await sleep(700);
+
+  assert.equal(groups.length, before - 1, "no replacement group is created");
+  assert.equal(calls.create.length, 0, "no blank tab is created for the merged group");
+  assert.equal(groups.filter((group) => group.title === "其他").length, 1);
+});
+
+test("pinned protection skips a default group while another one is alive", async () => {
+  assert.ok(
+    groups.some((group) => group.title === "其他"),
+    "the canonical default group should still exist",
+  );
+  calls.create.length = 0;
+  const before = groups.length;
+  chrome.tabGroups.onRemoved.fire({
+    id: 702,
+    windowId: 1,
+    title: "其他",
+    color: "grey",
+    collapsed: true,
+  });
+  await sleep(800);
+
+  assert.equal(calls.create.length, 0, "no duplicate default group is recreated");
+  assert.equal(groups.length, before);
+});
+
+test("duplicate default groups are still merged when defaultGroup is off", async () => {
+  await chrome.storage.sync.set({
+    settings: {
+      ...settings,
+      enabled: true,
+      defaultGroup: false,
+      defaultGroupTitle: "其他",
+      defaultGroupColor: "grey",
+      pinnedGroups: [{ title: "其他", color: "grey" }],
+    },
+  });
+  await sleep(350);
+
+  groups.push({ id: 703, windowId: 1, title: "其他", color: "grey", collapsed: false });
+  tabs.push({
+    id: 1203,
+    windowId: 1,
+    index: tabs.length,
+    groupId: 703,
+    pinned: false,
+    active: false,
+    lastAccessed: Date.now(),
+    url: "https://example.com/restored-again",
+  });
+  await chrome.storage.sync.set({ settings: { ...settings } });
+  await sleep(500);
+
+  const defaultGroupIds = new Set(
+    tabs
+      .filter((tab) => groups.some((group) => group.id === tab.groupId && group.title === "其他"))
+      .map((tab) => tab.groupId),
+  );
+  assert.equal(defaultGroupIds.size, 1, "duplicates are merged regardless of routing");
+  assert.equal(findTab(1203).groupId, [...defaultGroupIds][0]);
+});

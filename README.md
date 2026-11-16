@@ -31,6 +31,8 @@ Chrome MV3 扩展，把标签栏整理成“分组优先、只展开一个分组
 
 每个窗口的未分组标签页会被收进一个普通 Chrome 分组，默认标题 `其他`、颜色灰色。从固定状态取消固定的标签页没有分组，也会在下一轮整理时进入默认分组（`defaultGroup` 开启时）。该分组在创建时位于标签栏最右侧；之后你可以手动拖动它，扩展不会反复纠正位置。标题和颜色可在选项页修改。
 
+Chrome 会话恢复可能留下多个同名默认分组（典型场景：非正常退出后由外部链接拉起浏览器）。扩展启用时，归一化会检测同标题的重复分组并把所有标签页合并到一个：优先使用 remembered 分组，其次是标签页更多的分组，再次是最近使用的分组。该修复只移动已经分组的标签页，不会把未分组标签页收进默认分组，因此关掉 `defaultGroup` 规则后仍然生效。被合并清空的分组不会因为钉住保护而被重建。
+
 ### 只展开一个分组
 
 激活某个分组的标签页时，该分组展开，其他分组折叠。点击一个折叠分组的标题时（`expandHeaderClick` 开启），扩展会激活该分组中最近使用的标签页，从而展开它并折叠其他分组。
@@ -163,8 +165,8 @@ test/*.test.js         纯逻辑单元测试 + 后台事件接线测试（fake c
 版本号以 `manifest.json` 为准，并与 `CHANGELOG.md` 同步更新。发布使用 `v<version>` 标签：
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
 `.github/workflows/release.yml` 会运行 `npm test`、校验标签与清单版本、打包 `tabgroup-manager-<version>.zip`（含 `manifest.json`、`src/`、`icons/`、README、CHANGELOG），并创建或更新 GitHub Release 资源。

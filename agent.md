@@ -19,7 +19,7 @@
 | `manifest.json` | 权限、service worker module、选项页、弹窗、图标、`switch-to-default-group` 快捷键 |
 | `icons/icon.svg` + PNG | 扩展图标源文件，改图后重新导出 16/32/48/128 |
 | `src/background.js` | 事件接线、逐窗口串行归一化、启动门、固定分组保护、设置写入 |
-| `src/lib/layout.js` | `planGroupOrder`、`planCollapse`、`planNewTabTarget`、默认分组查找、NTP URL 判定 |
+| `src/lib/layout.js` | `planGroupOrder`、`planCollapse`、`planNewTabTarget`、默认分组查找与重复合并、NTP URL 判定 |
 | `src/lib/pinned.js` | `isPinnedGroup`（标题+颜色）、`choosePinnedRestore`（`skip` / `regroup` / `blank`） |
 | `src/lib/settings.js` | 默认值、标题/颜色/钉住列表校验、`loadSettings` / `saveSettings` |
 | `src/options.*` | 分组式设置卡片、默认分组、钉住列表、快捷键展示与跳转 |
@@ -81,6 +81,7 @@ flowchart LR
 5. 分类顺序：自身扩展页 → 空 URL 或 NTP URL（总是移动）→ 外部标签页（看 `externalNewTabInActiveGroup`）。不要因为 `openerTabId` 非空就跳过：Chrome 157 的外部启动标签页也会带上当时的活动标签页作为 opener；链接标签页和“在新标签页组中打开”此时已经被 Chrome 归组（`groupId !== -1`），会提前返回。
 6. 目标分组来自 `planNewTabTarget`；没有目标时查找或创建默认分组（先按 remembered ID，再按标题），不要重复创建同名默认分组。
 7. 分组失败重试一次（200ms），仍失败就交给下一轮归一化的默认分组。
+8. `normalizeWindow` 在 `ensureDefaultGroup` 之前调用 `mergeDuplicateDefaultGroups`：`planDefaultGroupMerge` 找出同标题的多个默认分组，按 remembered → 标签页数 → `lastAccessed` → 首个 index 选择 canonical，其余分组的标签页全部移入。移动前把源分组 id 写入 `mergedAwayGroups`（10s TTL）；`tabGroups.onRemoved` 命中该集合时直接返回，不能让钉住保护重建刚被合并清空的分组。该修复只处理已分组标签页，不受 `defaultGroup` 开关影响，但仍受总开关约束。
 
 其他状态：
 
@@ -97,7 +98,8 @@ flowchart LR
 - `tabs.onRemoved` 先从快照同步删除 ID，再刷新；这样最后一个标签页关闭时快照为空，才能触发空白页。
 - `tabs.onUpdated` 的 `groupId` 变化：从旧快照删除；新分组是钉住分组则加入；变为 `-1` 且有 origin 才 `claimPendingPinned`。
 - `tabs.onDetached/onAttached` 不立即改快照，等 `onRemoved` 处理完跨窗口移动。
-- `tabGroups.onRemoved`：先取快照；非钉住标题+颜色/未启用/未就绪直接丢弃；否则等 500ms 让移动和窗口关闭标志稳定。
+- `tabGroups.onRemoved`：先取快照；`isMergedAway(groupId)` 为真时清理后直接返回（该分组是 `mergeDuplicateDefaultGroups` 主动清空的）；非钉住标题+颜色/未启用/未就绪直接丢弃；否则等 500ms 让移动和窗口关闭标志稳定。
+- 恢复决策前若窗口内还有另一个同标题的默认分组，直接 `skip`：重复默认分组还活着时重建只会再次制造两份。`attemptPinnedRestore` 只在快照标题等于当前默认标题时更新 `defaultGroupByWindow`，恢复其他钉住分组不能清空默认分组记忆。
 - 恢复决策用纯函数 `choosePinnedRestore`：窗口关闭或已移动到其他窗口 → `skip`；同窗口存活的未分组标签页 → `regroup`；否则 → `blank`。不要抢其他分组里的存活标签页。
 - `restoreLocks` 按 `${windowId}:${groupId}` 防重入；`closingWindows` 5s TTL；`recentGroupCreations` 2s 内识别“移动到新窗口”。
 - 拖拽/不可编辑错误：整个恢复最多重试一次（300ms）；重试期间必须保留 pending 声明，否则归一化会把标签页扫进默认分组。所有清理放在 `finally`。
@@ -108,7 +110,7 @@ flowchart LR
 ## 设置与 UI
 
 - 单一存储键：`chrome.storage.sync.settings`。`normalizeSettings` 合并默认值、裁剪标题到 30 字符、校验九种颜色、钉住列表按标题+颜色去重、上限 50。
-- 后台 `save-settings` 在写存储前先重命名各窗口的默认分组（先 remembered ID，再旧标题匹配），避免设置切换后旧标题分组被当成普通分组。
+- 后台 `save-settings` 在写存储前重命名各窗口的默认分组（旧标题的全部同标题分组 + remembered ID），避免设置切换后旧标题分组被当成普通分组或留下重复项。
 - 选项页保存后立即 `refresh`，`chrome.storage.onChanged` 也会刷新；不要把设置写进本地副本。
 - 选项页钉住列表顺序即标签栏顺序；上/下移动、取消钉住都发送完整 `pinnedGroups` 数组。“取消钉住”不会关闭 Chrome 分组。
 - 弹窗只做只读统计 + 总开关 + 两个按钮；不要在弹窗复制完整设置。
@@ -164,6 +166,7 @@ npm test
 8. 开启“继续浏览上次打开的网页”后重启 → 分组/标题/颜色/顺序/单展开全部保持。
 9. 关闭总开关 → 激活、创建、取消分组都不被改写，固定分组保护停止；重新开启后收敛。
 10. 在选项页确认快捷键显示 `Alt+W`；从非默认分组按 `Alt+W` → 默认分组展开并激活 MRU。到 `chrome://extensions/shortcuts` 改键后回到选项页，显示应刷新；关闭总开关后快捷键不应改写标签页。
+11. 重复默认分组：制造两个同名默认分组（崩溃恢复 + 外部链接新建，或在 DevTools 里复制分组），触发归一化 → 所有标签页合并到一个分组、另一个消失；被合并清空的分组不会因钉住保护重建。钉住该默认分组时再验证一次。
 
 检查扩展页 `chrome://extensions` 无 runtime error；不要把 URL 加进日志来“调试分类”。
 

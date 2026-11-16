@@ -34,6 +34,61 @@ export function findDefaultGroup(groups, { title, rememberedId } = {}) {
   return list.find((group) => group.title === title) ?? null;
 }
 
+function groupStats(tabs, groupId) {
+  const stats = { first: Infinity, recent: -Infinity, tabIds: [] };
+  const own = [];
+  for (const tab of tabs ?? []) {
+    if (tab?.groupId !== groupId || tab.id == null) continue;
+    own.push(tab);
+    if (Number.isFinite(tab.index)) stats.first = Math.min(stats.first, tab.index);
+    if (Number.isFinite(tab.lastAccessed)) {
+      stats.recent = Math.max(stats.recent, tab.lastAccessed);
+    }
+  }
+  own.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  stats.tabIds = own.map((tab) => tab.id);
+  return stats;
+}
+
+/**
+ * A crash-restore window can end up with two groups carrying the default
+ * title: the restored one and one the extension created for an externally
+ * opened tab before Chrome finished restoring. Pick one canonical group and
+ * report every other group's tabs so the caller can merge them in place.
+ */
+export function planDefaultGroupMerge({
+  tabs = [],
+  groups = [],
+  title,
+  rememberedId = null,
+} = {}) {
+  if (typeof title !== "string" || title === "") return null;
+  const stats = new Map();
+  const live = [];
+  for (const group of groups ?? []) {
+    if (group?.title !== title) continue;
+    const entry = groupStats(tabs, group.id);
+    stats.set(group.id, entry);
+    if (entry.tabIds.length > 0) live.push(group);
+  }
+  if (live.length < 2) return null;
+
+  const rank = (group) => stats.get(group.id);
+  const ranked = live.slice().sort(
+    (a, b) =>
+      rank(b).tabIds.length - rank(a).tabIds.length ||
+      rank(b).recent - rank(a).recent ||
+      rank(a).first - rank(b).first ||
+      a.id - b.id,
+  );
+  const canonical = live.find((group) => group.id === rememberedId) ?? ranked[0];
+  const sources = live
+    .filter((group) => group.id !== canonical.id)
+    .map((group) => ({ groupId: group.id, tabIds: rank(group).tabIds }));
+  if (sources.length === 0) return null;
+  return { canonicalId: canonical.id, sources };
+}
+
 /** Group with the freshest tab; survives service-worker restarts. */
 export function mostRecentlyUsedGroupId(tabs, groups) {
   const known = new Set((groups ?? []).map((group) => group.id));

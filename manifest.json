@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tab Group Manager",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "minimum_chrome_version": "124",
   "description": "Groups first, one expanded group, new tabs in the active group",
   "permissions": [

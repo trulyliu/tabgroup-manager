@@ -10,6 +10,7 @@ import {
   mostRecentlyUsedGroupId,
   pickGroupTab,
   planCollapse,
+  planDefaultGroupMerge,
   planGroupOrder,
   planNewTabTarget,
 } from "../src/lib/layout.js";
@@ -162,6 +163,80 @@ test("mostRecentlyUsedGroupId uses the freshest grouped tab", () => {
   ];
   assert.equal(mostRecentlyUsedGroupId(tabs, groups), 2);
   assert.equal(mostRecentlyUsedGroupId([tab(10, 0, -1)], groups), null);
+});
+
+test("planDefaultGroupMerge ignores unique default titles", () => {
+  const groups = [group(1, "其他"), group(2, "Work")];
+  const tabs = [tab(10, 0, 1), tab(11, 1, 2)];
+  assert.equal(planDefaultGroupMerge({ tabs, groups, title: "其他" }), null);
+  assert.equal(planDefaultGroupMerge({ tabs: [], groups: [], title: "其他" }), null);
+  assert.equal(planDefaultGroupMerge({ tabs, groups, title: "" }), null);
+});
+
+test("planDefaultGroupMerge merges duplicates into the remembered group", () => {
+  const groups = [group(1, "其他"), group(2, "其他", "red"), group(3, "Work")];
+  const tabs = [
+    tab(12, 2, 2, { lastAccessed: 900 }),
+    tab(11, 1, 2),
+    tab(10, 0, 1),
+    tab(13, 3, 3),
+  ];
+  assert.deepEqual(
+    planDefaultGroupMerge({ tabs, groups, title: "其他", rememberedId: 2 }),
+    {
+      canonicalId: 2,
+      sources: [{ groupId: 1, tabIds: [10] }],
+    },
+  );
+});
+
+test("planDefaultGroupMerge falls back to the most recently used group", () => {
+  const groups = [group(1, "其他"), group(2, "其他")];
+  const tabs = [
+    tab(10, 0, 1, { lastAccessed: 100 }),
+    tab(11, 1, 2, { lastAccessed: 900 }),
+  ];
+  assert.deepEqual(
+    planDefaultGroupMerge({ tabs, groups, title: "其他" }),
+    {
+      canonicalId: 2,
+      sources: [{ groupId: 1, tabIds: [10] }],
+    },
+  );
+});
+
+test("planDefaultGroupMerge prefers the group holding more tabs", () => {
+  const groups = [group(1, "其他"), group(2, "其他")];
+  const tabs = [
+    tab(10, 0, 1, { lastAccessed: 100 }),
+    tab(11, 1, 1, { lastAccessed: 200 }),
+    tab(12, 2, 2, { lastAccessed: 900 }),
+  ];
+  assert.deepEqual(
+    planDefaultGroupMerge({ tabs, groups, title: "其他" }),
+    {
+      canonicalId: 1,
+      sources: [{ groupId: 2, tabIds: [12] }],
+    },
+  );
+});
+
+test("planDefaultGroupMerge keeps tab order inside each source group", () => {
+  const groups = [group(1, "其他"), group(2, "其他")];
+  const tabs = [tab(14, 1, 2), tab(10, 0, 1), tab(15, 2, 2)];
+  assert.deepEqual(
+    planDefaultGroupMerge({ tabs, groups, title: "其他", rememberedId: 1 }),
+    {
+      canonicalId: 1,
+      sources: [{ groupId: 2, tabIds: [14, 15] }],
+    },
+  );
+});
+
+test("planDefaultGroupMerge ignores empty duplicate groups", () => {
+  const groups = [group(1, "其他"), group(2, "其他")];
+  const tabs = [tab(10, 0, 1)];
+  assert.equal(planDefaultGroupMerge({ tabs, groups, title: "其他" }), null);
 });
 
 
