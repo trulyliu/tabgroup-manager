@@ -37,11 +37,11 @@ Chrome MV3 扩展，把标签栏整理成“分组优先、只展开一个分组
 
 点击一个**已经展开**的分组标题时，由 `expandedGroupHeaderClick` 选择三种行为之一，三种行为都不受固定标签页影响：
 
-- `newtab`（新建标签页）：在点击的分组内新建一个 `chrome://newtab/` 标签页，激活它并保持分组展开。Chrome 为此创建的临时占位页会被关闭。
+- `newtab`（新建标签页）：在点击的分组内新建一个 `chrome://newtab/` 标签页，激活它并保持分组展开。如果 Chrome 已为该次点击创建了占位页，扩展直接接管它，不再关闭后重建。
 - `collapse`（折叠）：点击**非默认分组**时，收起该分组，展开默认分组并激活其最近使用的标签页；点击**默认分组**时不做任何分组变更（保持展开，激活其最近使用的标签页）。没有默认分组时按 `noaction` 处理。
 - `noaction`（不处理）：无论点击默认还是非默认分组，当前分组保持展开，焦点回到该分组最近使用的标签页；其他分组保持折叠。
 
-关于 Chrome 占位页：点击已展开分组时，Chrome 可能先新建一个空白标签页以便移动焦点。所有三种模式都会在识别到该占位页后将其关闭；`newtab` 模式只保留自己创建的、位于分组内的新标签页。识别依赖 300ms 内的创建时间与 opener 归属，Chrome 可能让占位页短暂闪现。
+关于 Chrome 占位页：点击已展开分组时，Chrome 可能先新建一个空白标签页以便移动焦点。`newtab` 模式直接复用这个占位页，因此只有一次页面创建；`collapse` / `noaction` 模式先激活目标标签页，再关闭占位页，避免删除活动标签页触发额外的页面切换。识别依赖 300ms 内的创建时间与 opener 归属，`collapse` / `noaction` 下仍可能看到 Chrome 原生占位页短暂闪现。
 
 普通地激活一个固定标签页（不是点击分组标题）时：
 
@@ -122,8 +122,8 @@ Chrome 没有禁止删除分组的 API，也没有 `tabGroups.close`。保护方
 - 无法读取或修改 Chrome 的“启动时”设置。
 - 默认分组是普通分组：关闭它会关闭其中的标签页；关闭 `defaultGroup` 规则才能保留手动取消分组的结果。
 - 在 Chrome 中手动重命名默认分组后，扩展不会跟随；下次启动可能新建一个默认分组。
-- 新标签页可能有短暂未分组闪烁；点击已展开分组时 Chrome 的占位页也是先创建再被关闭。
-- 占位页识别依赖 Chrome 设置 `openerTabId` 且创建时间在 300ms 内；其他 Chrome 版本若改变该行为，可能多出一个占位标签页。
+- `collapse` / `noaction` 下点击已展开分组的标题时，Chrome 会先自行选择焦点：有固定标签页时激活它，否则创建占位页，然后才通知扩展。扩展无法拦截这段原生行为，可能看到一次短暂切换或空白页闪烁；`newtab` 只会复用或创建一个组内 NTP。
+- 占位页识别依赖 Chrome 设置 `openerTabId` 且创建时间在 300ms 内；其他 Chrome 版本若改变该行为，可能多出一个占位标签页，或让扩展无法复用占位页而另行新建。
 - 固定分组保护只在扩展就绪后生效；浏览器启动的最初约 1.5 秒内删除的分组不会被恢复。
 - 启动恢复依赖 Chrome 自己的会话恢复；扩展不保存 URL，也不提供跨浏览器配置同步之外的备份。
 
@@ -134,6 +134,8 @@ npm test
 ```
 
 测试使用 Node 内置的 `node:test`，无第三方依赖。注意：`package.json` 中的脚本是 `node --test test/*.test.js`；Node 24 不接受把 `test/` 目录直接作为参数。
+
+变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 目录：
 
@@ -148,6 +150,17 @@ src/options.*          选项页
 src/popup.*            工具栏弹窗
 test/*.test.js         纯逻辑单元测试 + 后台事件接线测试（fake chrome）
 ```
+
+### 发布
+
+版本号以 `manifest.json` 为准，并与 `CHANGELOG.md` 同步更新。发布使用 `v<version>` 标签：
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+`.github/workflows/release.yml` 会运行 `npm test`、校验标签与清单版本、打包 `tabgroup-manager-<version>.zip`（含 `manifest.json`、`src/`、`icons/`、README、CHANGELOG），并创建或更新 GitHub Release 资源。
 
 手动验收：加载已解压扩展后，至少检查默认分组、分组排序、单展开、Ctrl+T 归属、钉住分组删空重建、取消钉住后可删除，以及开启“继续浏览上次打开的网页”后的重启恢复。
 

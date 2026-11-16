@@ -38,6 +38,7 @@ const IGNORE_CREATED_TTL_MS = 10000;
 const SELF_UPDATE_TTL_MS = 2000;
 const CLOSING_WINDOW_TTL_MS = 5000;
 const RETRY_LIMIT = 3;
+const HEADER_ACTION_TTL_MS = 2000;
 const DRAG_ERROR = /dragging|not editable/i;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -70,6 +71,7 @@ const restoreLocks = new Set();
 const recentGroupCreations = new Map();
 const collapsedStates = new Map();
 const headerActivationUntil = new Map();
+const headerActionUntil = new Map();
 
 const pinnedSnapshots = new Map();
 let snapshotTimer = null;
@@ -251,7 +253,10 @@ async function normalizeWindow(windowId) {
   if (settings.groupsFirst || settings.pinnedGroups.length > 0) {
     retry = (await applyGroupOrder(windowId, settings)) || retry;
   }
-  if (settings.singleExpanded) {
+  // A header action is switching focus and collapsing/expanding groups itself;
+  // running the single-expanded pass in between makes the tab strip flicker.
+  const headerBusy = (headerActionUntil.get(windowId) ?? 0) > Date.now();
+  if (settings.singleExpanded && !headerBusy) {
     retry = (await applySingleExpanded(windowId, settings)) || retry;
   }
 
@@ -895,9 +900,9 @@ async function activateTabWithRetry(tabId, attempt = 0) {
 /**
  * Chrome opens a throwaway blank tab when the user collapses the active group
  * and nothing outside it can take focus (no pinned tab, no other expanded
- * group). Close that tab; normalization then picks the next group to expand.
+ * group). Snapshot the window once and identify that tab.
  */
-async function suppressCollapseReplacement(group) {
+async function captureCollapse(group) {
   let tabs = [];
   let groups = [];
   try {
@@ -906,16 +911,25 @@ async function suppressCollapseReplacement(group) {
       chrome.tabGroups.query({ windowId: group.windowId }),
     ]);
   } catch {
-    return;
+    return null;
   }
   const live = groups.find((entry) => entry.id === group.id);
-  if (!live || !live.collapsed) return;
+  if (!live || !live.collapsed) return null;
   const replacementId = findCollapseReplacement({
     tabs,
     creations: recentTabCreations,
     groupId: group.id,
     now: Date.now(),
   });
+  return { tabs, groups, live, replacementId };
+}
+
+/**
+ * Remove Chrome's throwaway tab only after focus moved elsewhere. Removing it
+ * while active makes Chrome activate a neighbour first, which loads another
+ * page and causes an extra flash.
+ */
+async function discardCollapseReplacement(replacementId, windowId) {
   if (replacementId == null) return;
   try {
     await chrome.tabs.remove(replacementId);
@@ -923,11 +937,34 @@ async function suppressCollapseReplacement(group) {
     return;
   }
   recentTabCreations.delete(replacementId);
-  schedule(group.windowId);
+  schedule(windowId);
 }
 
 async function headerNewTab(group) {
-  await suppressCollapseReplacement(group);
+  const context = await captureCollapse(group);
+  if (!context) return;
+
+  if (context.replacementId != null) {
+    // The throwaway tab is already an active new-tab page. Adopt it instead of
+    // closing it and creating an identical tab, which flashed tab bar + page.
+    markIgnoredCreated(context.replacementId);
+    claimPendingCreated(context.replacementId);
+    try {
+      await chrome.tabs.update(context.replacementId, { active: true });
+    } catch {
+      // Tab closed meanwhile; the move below no-ops and normalization settles.
+    }
+    await moveTabIntoTarget(context.replacementId, group.id);
+    lastActiveGroupByWindow.set(group.windowId, group.id);
+    try {
+      const current = await chrome.tabGroups.get(group.id);
+      if (current.collapsed) await updateCollapsed(group.id, false);
+    } catch {
+      // Group vanished; the normal default-group pass handles the orphan tab.
+    }
+    schedule(group.windowId);
+    return;
+  }
 
   let live = null;
   try {
@@ -1002,23 +1039,12 @@ async function focusDefaultGroup(windowId, excludeGroupId = null) {
 }
 
 async function headerCollapseToDefault(group) {
-  await suppressCollapseReplacement(group);
-
-  let tabs = [];
-  let groups = [];
-  try {
-    [tabs, groups] = await Promise.all([
-      chrome.tabs.query({ windowId: group.windowId }),
-      chrome.tabGroups.query({ windowId: group.windowId }),
-    ]);
-  } catch {
-    return;
-  }
-  const live = groups.find((entry) => entry.id === group.id);
-  if (!live || !live.collapsed) return;
+  const context = await captureCollapse(group);
+  if (!context) return;
+  const { tabs, groups, live, replacementId } = context;
 
   if (live.title === currentSettings.defaultGroupTitle) {
-    await keepGroupExpandedAfterCollapse(group);
+    await keepGroupExpandedAfterCollapse(group, context);
     return;
   }
 
@@ -1036,12 +1062,12 @@ async function headerCollapseToDefault(group) {
     )
     .sort((a, b) => starts.get(a.id) - starts.get(b.id))[0];
   if (!defaultGroup) {
-    await keepGroupExpandedAfterCollapse(group);
+    await keepGroupExpandedAfterCollapse(group, context);
     return;
   }
   const pick = pickGroupTab(tabs, defaultGroup.id);
   if (!pick) {
-    await keepGroupExpandedAfterCollapse(group);
+    await keepGroupExpandedAfterCollapse(group, context);
     return;
   }
 
@@ -1049,29 +1075,17 @@ async function headerCollapseToDefault(group) {
   try {
     await chrome.tabs.update(pick.id, { active: true });
   } catch {
-    return;
+    // The tab closed mid-click; still drop the throwaway tab below.
   }
+  await discardCollapseReplacement(replacementId, group.windowId);
   schedule(group.windowId);
 }
 
-async function keepGroupExpandedAfterCollapse(group) {
-  await suppressCollapseReplacement(group);
+async function keepGroupExpandedAfterCollapse(group, context = null) {
+  const snapshot = context ?? (await captureCollapse(group));
+  if (!snapshot) return;
 
-  let live = null;
-  try {
-    live = await chrome.tabGroups.get(group.id);
-  } catch {
-    return;
-  }
-  if (!live || !live.collapsed) return;
-
-  let tabs = [];
-  try {
-    tabs = await chrome.tabs.query({ windowId: group.windowId });
-  } catch {
-    return;
-  }
-  const pick = pickGroupTab(tabs, group.id);
+  const pick = pickGroupTab(snapshot.tabs, group.id);
   if (!pick) return;
 
   lastActiveGroupByWindow.set(group.windowId, group.id);
@@ -1086,6 +1100,7 @@ async function keepGroupExpandedAfterCollapse(group) {
   } catch {
     // Group vanished or Chrome already expanded it by activating its tab.
   }
+  await discardCollapseReplacement(snapshot.replacementId, group.windowId);
   schedule(group.windowId);
 }
 
@@ -1099,19 +1114,22 @@ async function handleGroupUpdated(group) {
 
   if (previous === false && group.collapsed === true && Date.now() >= warmupUntil) {
     const action = currentSettings.expandedGroupHeaderClick;
-    if (action === "newtab") {
-      void headerNewTab(group).catch((err) =>
-        console.warn("[gtm] header new-tab failed", errorText(err)),
-      );
-    } else if (action === "collapse") {
-      void headerCollapseToDefault(group).catch((err) =>
-        console.warn("[gtm] header collapse failed", errorText(err)),
-      );
-    } else {
-      void keepGroupExpandedAfterCollapse(group).catch((err) =>
-        console.warn("[gtm] keep-expanded failed", errorText(err)),
-      );
-    }
+    const until = Date.now() + HEADER_ACTION_TTL_MS;
+    headerActionUntil.set(group.windowId, until);
+    const task =
+      action === "newtab"
+        ? headerNewTab(group)
+        : action === "collapse"
+          ? headerCollapseToDefault(group)
+          : keepGroupExpandedAfterCollapse(group);
+    void task
+      .catch((err) => console.warn("[gtm] header action failed", errorText(err)))
+      .finally(() => {
+        if (headerActionUntil.get(group.windowId) === until) {
+          headerActionUntil.delete(group.windowId);
+        }
+        schedule(group.windowId);
+      });
   }
 
   if (!currentSettings.singleExpanded) return;
@@ -1281,6 +1299,7 @@ chrome.windows.onRemoved.addListener((windowId) => {
   closingWindows.delete(windowId);
   recentCreations.delete(windowId);
   burstSuppressUntil.delete(windowId);
+  headerActionUntil.delete(windowId);
   clearTimeout(scheduleTimers.get(windowId));
   scheduleTimers.delete(windowId);
   windowChains.delete(windowId);

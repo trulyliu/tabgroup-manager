@@ -77,7 +77,7 @@ const tabs = [
     url: "https://example.com/alpha-b",
   },
 ];
-const calls = { group: [], create: [], move: [], remove: [] };
+const calls = { group: [], create: [], move: [], remove: [], sequence: [] };
 let nextTabId = 10;
 let nextGroupId = 200;
 
@@ -195,6 +195,7 @@ const chrome = {
     },
     async update(tabId, properties) {
       if (properties.active === true) {
+        calls.sequence.push({ type: "activate", tabId });
         for (const entry of tabs) entry.active = false;
       }
       Object.assign(findTab(tabId), properties);
@@ -219,6 +220,7 @@ const chrome = {
       return clone(tab);
     },
     async remove(tabId) {
+      calls.sequence.push({ type: "remove", tabId });
       calls.remove.push(tabId);
       const at = tabs.findIndex((entry) => entry.id === tabId);
       if (at !== -1) tabs.splice(at, 1);
@@ -306,12 +308,19 @@ test("closing the throwaway tab Chrome creates on group collapse", async () => {
   tabs.push(replacement);
   findTab(4).active = false;
   calls.remove.length = 0;
+  calls.sequence.length = 0;
 
   chrome.tabs.onCreated.fire(clone(replacement));
   alpha.collapsed = true;
   chrome.tabGroups.onUpdated.fire(clone(alpha));
   await sleep(150);
 
+  const activationIndex = calls.sequence.findIndex((entry) => entry.type === "activate");
+  const removalIndex = calls.sequence.findIndex(
+    (entry) => entry.type === "remove" && entry.tabId === 6,
+  );
+  assert.ok(activationIndex !== -1, "a fallback tab must be activated");
+  assert.ok(removalIndex > activationIndex, "focus moves before the throwaway tab closes");
   assert.deepEqual(calls.remove, [6]);
   assert.equal(tabs.some((entry) => entry.id === 6), false);
 });
@@ -606,4 +615,54 @@ test("same-title groups with another color are not protected", async () => {
     false,
   );
   assert.ok(groups.some((entry) => entry.title === "Default" && entry.color === "red"));
+});
+
+test("newtab action reuses Chrome's throwaway tab instead of recreating it", async () => {
+  await chrome.storage.sync.set({
+    settings: { ...settings, expandedGroupHeaderClick: "newtab" },
+  });
+  await sleep(300);
+
+  const alpha = groups.find((entry) => entry.title === "Alpha" && entry.color === "blue");
+  assert.ok(alpha, "Alpha group should exist");
+  const alphaTab = tabs.find((entry) => entry.groupId === alpha.id);
+  assert.ok(alphaTab, "Alpha group should not be empty");
+
+  alpha.collapsed = false;
+  for (const entry of tabs) entry.active = false;
+  alphaTab.active = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  chrome.tabs.onActivated.fire({ windowId: 1, tabId: alphaTab.id });
+  await sleep(250);
+
+  const before = tabs.length;
+  calls.create.length = 0;
+  calls.remove.length = 0;
+
+  const replacement = {
+    id: 999,
+    windowId: 1,
+    index: tabs.length,
+    groupId: -1,
+    pinned: false,
+    active: true,
+    lastAccessed: Date.now(),
+    openerTabId: alphaTab.id,
+    url: "chrome://newtab/",
+    pendingUrl: "chrome://newtab/",
+  };
+  for (const entry of tabs) entry.active = false;
+  tabs.push(replacement);
+  chrome.tabs.onCreated.fire(clone(replacement));
+
+  alpha.collapsed = true;
+  chrome.tabGroups.onUpdated.fire(clone(alpha));
+  await sleep(500);
+
+  assert.equal(calls.create.length, 0, "no second new-tab page is created");
+  assert.equal(calls.remove.includes(999), false, "the throwaway tab is kept");
+  assert.equal(findTab(999).groupId, alpha.id);
+  assert.equal(findTab(999).active, true);
+  assert.equal(findGroup(alpha.id).collapsed, false);
+  assert.equal(tabs.length, before + 1);
 });
