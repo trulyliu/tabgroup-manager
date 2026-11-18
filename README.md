@@ -80,8 +80,10 @@ Chrome 没有“在创建前拦截 Ctrl+T”的 API，因此新标签页可能�
 
 Chrome 没有禁止删除分组的 API，也没有 `tabGroups.close`。保护方式是“保证分组永不空”：
 
-- 关闭分组内最后一个标签页、Chrome 的“关闭分组”“删除分组”：重建同标题、同颜色的分组，放入一个未激活的 `chrome://newtab/` 空白页。真实标签页不会被重新打开。
+- 关闭分组内最后一个标签页、Chrome 的“关闭分组”“删除分组”：如果窗口里没有同标题同色的其他分组，重建同标题、同颜色的分组，放入一个未激活的 `chrome://newtab/` 空白页；有的话复用它。真实标签页不会被重新打开。
 - Chrome 的“取消分组”：仍然存活的标签页会被重新归入同标题同色的分组，不会额外添加空白页。
+- 如果同标题同色的另一个分组已经存在（例如 Chrome 已经恢复或打开了保存的分组），关闭钉住分组时会直接复用它，并把仍然存活的标签页并入，不会新建空白分组。
+- 多个同标题同色的钉住分组同时存在时，归一化会把它们合并到一个分组，优先保留标签页更多、最近使用的分组；被合并清空的分组不会因钉住保护而重建。
 - 把分组移动到新窗口：新窗口中保留原分组，不在旧窗口补空白分组。
 - 关闭整个窗口或退出浏览器：不重建，交给 Chrome 的会话恢复。
 - 空白页被关闭后，分组会再次以新的空白页出现，这是保护机制的预期行为。
@@ -135,6 +137,7 @@ Chrome 没有禁止删除分组的 API，也没有 `tabGroups.close`。保护方
 
 - Chrome 不允许扩展绘制或钉住分组标签，也不能把分组排到固定标签页之前。
 - 无法真正禁止删除分组；只能通过“保持非空”重建。Chrome 的“已保存的标签组”界面里可能同时出现重建后的分组和旧的保存项。
+- Chrome 的“已保存的标签组”对扩展不可见，也没有 API 可以打开它；关闭钉住分组时扩展无法自动打开 Chrome 保存的那一份。保存分组手动打开后，扩展会自动复用它并合并重复分组。跟踪 Chromium issue：https://issues.chromium.org/issues/374592179
 - 无法读取或修改 Chrome 的“启动时”设置。
 - 默认分组是普通分组：关闭它会关闭其中的标签页；关闭 `defaultGroup` 规则才能保留手动取消分组的结果。
 - 在 Chrome 中手动重命名默认分组后，扩展不会跟随：该分组变成普通分组，之后的未分组标签页会进入新建的默认分组。
@@ -176,11 +179,11 @@ test/fake-chrome.js    后台测试共享的 fake chrome API
 版本号以 `manifest.json` 为准，并与 `CHANGELOG.md` 同步更新。发布使用 `v<version>` 标签：
 
 ```bash
-git tag v0.4.0
-git push origin v0.4.0
+git tag v0.4.1
+git push origin v0.4.1
 ```
 
-`.github/workflows/release.yml` 会运行 `npm test`、校验标签与清单版本、打包 `tabgroup-manager-<version>.zip`（含 `manifest.json`、`src/`、`icons/`、README、CHANGELOG），并创建或更新 GitHub Release 资源。
+`.github/workflows/release.yml` 会运行 `npm test`、校验标签与清单版本、打包 `tabgroup-manager-<version>.zip`（含 `manifest.json`、`src/`、`_locales/`、`icons/`、README、CHANGELOG），并创建或更新 GitHub Release 资源。
 
 手动验收：加载已解压扩展后，至少检查默认分组、分组排序、单展开、Ctrl+T 归属、钉住分组删空重建、取消钉住后可删除，以及开启“继续浏览上次打开的网页”后的重启恢复。
 

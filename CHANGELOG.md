@@ -4,6 +4,17 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.4.1] - 2026-11-18
+
+### Fixed
+
+- 关闭钉住分组时，如果窗口中已经存在同标题同色的分组（例如 Chrome 已恢复或打开的保存分组），直接复用它并合并仍然存活的标签页，不再新建空白分组。
+- 多个同标题同色的钉住分组同时存在时，归一化会把它们合并到一个分组；被合并清空的分组不会因为钉住保护而重建。
+
+### Limitations
+
+- Chrome 没有向扩展提供枚举或打开“已保存的标签组”的 API。扩展无法在关闭钉住分组时自动打开 Chrome 保存的那一份；保存分组只有在用户手动打开后，才会与重建分组复用/合并。跟踪 Chromium issue：https://issues.chromium.org/issues/374592179
+
 ## [0.4.0] - 2026-11-17
 
 ### Added

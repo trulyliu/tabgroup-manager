@@ -18,6 +18,7 @@ import {
   pickGroupTab,
   planCollapse,
   planDefaultGroupMerge,
+  planGroupMerge,
   planGroupOrder,
   planNewTabTarget,
 } from "./lib/layout.js";
@@ -372,7 +373,9 @@ async function normalizeWindow(windowId) {
   let retry = false;
   // Duplicate detection is a repair, not routing: run it even when new tabs no
   // longer auto-join the default group, otherwise an existing duplicate pair
-  // stays undeletable forever.
+  // stays undeletable forever. Pinned identities are exact title+color, so they
+  // are merged before the title-only default-group repair.
+  retry = (await mergeDuplicatePinnedGroups(windowId, settings)) || retry;
   retry = (await mergeDuplicateDefaultGroups(windowId, settings)) || retry;
   if (settings.defaultGroup) {
     retry = (await ensureDefaultGroup(windowId, settings)) || retry;
@@ -458,6 +461,82 @@ async function mergeDuplicateDefaultGroups(windowId, settings) {
     // protection must not read that as a deleted group and recreate it.
     markMergedAway(source.groupId);
     retry = (await addTabsToGroup(source.tabIds, plan.canonicalId)) || retry;
+  }
+  return retry;
+}
+
+/**
+ * Two live groups can share a pinned identity when Chrome restores a saved
+ * group next to the blank group the extension recreated. Both are protected by
+ * the same title+color, so leaving them separate makes them impossible to
+ * remove. Merge every duplicate into one canonical group.
+ */
+async function mergeDuplicatePinnedGroups(windowId, settings) {
+  if (settings.pinnedGroups.length === 0) return false;
+  for (const key of restoreLocks) {
+    if (key.startsWith(`${windowId}:`)) return false;
+  }
+
+  let tabs = [];
+  let groups = [];
+  try {
+    [tabs, groups] = await Promise.all([
+      chrome.tabs.query({ windowId }),
+      chrome.tabGroups.query({ windowId }),
+    ]);
+  } catch {
+    return false;
+  }
+
+  let retry = false;
+  let merged = false;
+  for (const pinned of settings.pinnedGroups) {
+    const plan = planGroupMerge({
+      tabs,
+      groups,
+      title: pinned.title,
+      color: pinned.color,
+    });
+    if (!plan) continue;
+    merged = true;
+    console.info(
+      "[gtm] merging duplicate pinned groups",
+      windowId,
+      pinned.title,
+      pinned.color,
+      plan.sources.map((source) => source.groupId).join(","),
+      "->",
+      plan.canonicalId,
+    );
+
+    const activeId = lastActiveGroupByWindow.get(windowId);
+    if (plan.sources.some((source) => source.groupId === activeId)) {
+      lastActiveGroupByWindow.set(windowId, plan.canonicalId);
+    }
+    const defaultId = defaultGroupByWindow.get(windowId);
+    if (plan.sources.some((source) => source.groupId === defaultId)) {
+      defaultGroupByWindow.set(windowId, plan.canonicalId);
+    }
+
+    for (const source of plan.sources) {
+      // The move empties the source; pinned protection must not recreate it.
+      markMergedAway(source.groupId);
+      const failed = await addTabsToGroup(source.tabIds, plan.canonicalId);
+      if (failed) {
+        retry = true;
+        try {
+          await chrome.tabGroups.get(source.groupId);
+          mergedAwayGroups.delete(source.groupId);
+        } catch {
+          // The source was emptied; leave suppression for tabGroups.onRemoved.
+        }
+      }
+    }
+  }
+
+  if (merged) {
+    refreshPinnedSnapshots();
+    schedule(windowId);
   }
   return retry;
 }
@@ -838,6 +917,74 @@ async function attemptPinnedRestore(snapshot, attempt, state = { blankTabId: nul
       recentMoveWindowId = record.windowId;
       break;
     }
+  }
+
+  // A saved group with the same pinned identity may already be live (for
+  // example after Chrome reopened it). Reuse it instead of creating a blank
+  // duplicate; merge any additional copies into it.
+  const existingPinned = groups.filter(
+    (entry) =>
+      entry.windowId === snapshot.windowId &&
+      entry.id !== snapshot.groupId &&
+      entry.title === snapshot.title &&
+      entry.color === snapshot.color,
+  );
+  if (existingPinned.length > 0) {
+    let windowTabs = [];
+    try {
+      windowTabs = await chrome.tabs.query({ windowId: snapshot.windowId });
+    } catch {
+      windowTabs = alive;
+    }
+
+    let canonicalId = existingPinned[0].id;
+    let sources = [];
+    if (existingPinned.length > 1) {
+      const plan = planGroupMerge({
+        tabs: windowTabs,
+        groups: existingPinned,
+        title: snapshot.title,
+        color: snapshot.color,
+      });
+      if (plan) {
+        canonicalId = plan.canonicalId;
+        sources = plan.sources;
+      }
+    }
+
+    if (snapshot.title === currentSettings.defaultGroupTitle) {
+      defaultGroupByWindow.set(snapshot.windowId, canonicalId);
+    }
+    const activeId = lastActiveGroupByWindow.get(snapshot.windowId);
+    if (sources.some((source) => source.groupId === activeId)) {
+      lastActiveGroupByWindow.set(snapshot.windowId, canonicalId);
+    }
+
+    let retry = false;
+    for (const source of sources) {
+      markMergedAway(source.groupId);
+      const failed = await addTabsToGroup(source.tabIds, canonicalId);
+      if (failed) {
+        retry = true;
+        try {
+          await chrome.tabGroups.get(source.groupId);
+          mergedAwayGroups.delete(source.groupId);
+        } catch {
+          // The source was emptied; leave suppression for tabGroups.onRemoved.
+        }
+      }
+    }
+    const ungrouped = alive
+      .filter((tab) => tab.groupId === TAB_GROUP_ID_NONE && tab.windowId === snapshot.windowId)
+      .map((tab) => tab.id);
+    if (ungrouped.length > 0) {
+      retry = (await addTabsToGroup(ungrouped, canonicalId)) || retry;
+    }
+    if (retry) return "retry";
+
+    if (snapshot.wasExpanded) await focusGroup(snapshot.windowId, canonicalId);
+    schedule(snapshot.windowId);
+    return "done";
   }
 
   // The window already has a live group with the default title: this removal
@@ -1291,6 +1438,26 @@ async function focusDefaultGroup(windowId, excludeGroupId = null) {
   if (!pick) return false;
 
   lastActiveGroupByWindow.set(windowId, defaultGroup.id);
+  try {
+    await chrome.tabs.update(pick.id, { active: true });
+  } catch {
+    return false;
+  }
+  schedule(windowId);
+  return true;
+}
+
+/** Activate the most recently used tab of a specific group. */
+async function focusGroup(windowId, groupId) {
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({ windowId });
+  } catch {
+    return false;
+  }
+  const pick = pickGroupTab(tabs, groupId);
+  if (!pick) return false;
+  lastActiveGroupByWindow.set(windowId, groupId);
   try {
     await chrome.tabs.update(pick.id, { active: true });
   } catch {

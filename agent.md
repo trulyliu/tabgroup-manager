@@ -21,7 +21,7 @@
 | `icons/icon.svg` + PNG | 扩展图标源文件，改图后重新导出 16/32/48/128 |
 | `src/background.js` | 事件接线、逐窗口串行归一化、启动门、固定分组保护、设置写入 |
 | `src/i18n.js` | UI 多语言加载辅助（`t()`、`localizePage()`、`colorLabel()`） |
-| `src/lib/layout.js` | `planGroupOrder`、`planCollapse`、`planNewTabTarget`、默认分组查找与重复合并、NTP URL 判定 |
+| `src/lib/layout.js` | `planGroupOrder`、`planCollapse`、`planNewTabTarget`、默认分组查找、`planGroupMerge`（默认/钉住重复合并）、NTP URL 判定 |
 | `src/lib/pinned.js` | `isPinnedGroup`（标题+颜色）、`choosePinnedRestore`（`skip` / `regroup` / `blank`） |
 | `src/lib/settings.js` | 默认值、标题/颜色/钉住列表校验、`loadSettings` / `saveSettings` |
 | `src/options.*` | 分组式设置卡片、默认分组、钉住列表、快捷键展示与跳转 |
@@ -102,14 +102,16 @@ flowchart LR
 - `tabs.onRemoved` 先从快照同步删除 ID，再刷新；这样最后一个标签页关闭时快照为空，才能触发空白页。
 - `tabs.onUpdated` 的 `groupId` 变化：从旧快照删除；新分组是钉住分组则加入；变为 `-1` 且有 origin 才 `claimPendingPinned`。
 - `tabs.onDetached/onAttached` 不立即改快照，等 `onRemoved` 处理完跨窗口移动。
-- `tabGroups.onRemoved`：先取快照；`isMergedAway(groupId)` 为真时清理后直接返回（该分组是 `mergeDuplicateDefaultGroups` 主动清空的）；非钉住标题+颜色/未启用/未就绪直接丢弃；否则等 500ms 让移动和窗口关闭标志稳定。
-- 恢复决策前若窗口内还有另一个同标题的默认分组，直接 `skip`：重复默认分组还活着时重建只会再次制造两份。`attemptPinnedRestore` 只在快照标题等于当前默认标题时更新 `defaultGroupByWindow`，恢复其他钉住分组不能清空默认分组记忆。
+- `tabGroups.onRemoved`：先取快照；`isMergedAway(groupId)` 为真时清理后直接返回（该分组是 `mergeDuplicateDefaultGroups` 或 `mergeDuplicatePinnedGroups` 主动清空的）；非钉住标题+颜色/未启用/未就绪直接丢弃；否则等 500ms 让移动和窗口关闭标志稳定。
+- 恢复决策前若窗口内还有另一个同标题的默认分组，直接 `skip`：重复默认分组还活着时重建只会再次制造两份。`attemptPinnedRestore` 只在快照标题等于当前默认标题时更新 `defaultGroupByWindow`，恢复其他钉住分组不能清空默认分组记忆。若窗口内已有同标题同色的钉住分组，优先复用它：把其他同身份分组合并进来、把存活未分组标签页加入它；原本展开时激活它的 MRU。没有可复用分组才走 `choosePinnedRestore` 的 `regroup` / `blank`。
 - 恢复决策用纯函数 `choosePinnedRestore`：窗口关闭或已移动到其他窗口 → `skip`；同窗口存活的未分组标签页 → `regroup`；否则 → `blank`。不要抢其他分组里的存活标签页。
 - `restoreLocks` 按 `${windowId}:${groupId}` 防重入；`closingWindows` 5s TTL；`recentGroupCreations` 2s 内识别“移动到新窗口”。
 - 拖拽/不可编辑错误：整个恢复最多重试一次（300ms）；重试期间必须保留 pending 声明，否则归一化会把标签页扫进默认分组。所有清理放在 `finally`。
 - 空白页创建：`chrome://newtab/`，失败回退 `about:blank`；必须未激活。创建后同时标记 `ignoreCreatedTabs` 和 `claimPendingPinned`，再归组。空白页 ID 通过 `state.blankTabId` 在重试间共享：重试复用第一次的空白页，不能再建一个；重试也失败时关闭这个未归组的空白页，不让它漏进默认分组。
 - 身份是**标题 + 颜色**：标题精确、区分大小写，颜色必须在九色枚举内且一致；同标题同色分组全部钉住。重命名或改色即失去钉住；无标题分组不可钉住。选项页、`planGroupOrder`、快照筛选、移动识别和恢复判定都必须用同一个二元组，不能只比标题。
 - 重建前要判断该分组是否原本展开：Chrome 可能在移除前先把它折叠，因此用 `pinnedSnapshots` 中最后一次刷新到的 `collapsed`（`snapshot.wasExpanded`），不要只看 `tabGroups.onRemoved` 的 `group.collapsed`。原本展开且标题不是默认组时，重建后调用 `focusDefaultGroup` 激活默认组 MRU 标签页并折叠重建组，避免其他钉住分组抢占展开位。
+- `mergeDuplicatePinnedGroups` 在 `mergeDuplicateDefaultGroups` 之前运行，用 `planGroupMerge` 按**标题 + 颜色**找重复钉住分组；canonical 依次按标签页数、最近使用、首个 index 选择。源分组移动前写 `mergedAwayGroups`（10s TTL），防止 `onRemoved` 触发空白重建；有 `restoreLocks` 时跳过，交给正在进行的恢复处理。
+- Chrome 的已保存标签组在打开前对扩展不可见，扩展无法主动打开保存分组；只能在其成为 live group 后复用/合并。不要试图用书签或存储推测已保存分组。上游 API 跟踪见文末“外部限制跟踪”。
 
 ## 设置与 UI
 
@@ -174,14 +176,19 @@ npm test
 9. 关闭总开关 → 激活、创建、取消分组都不被改写，固定分组保护停止；重新开启后收敛。
 10. 在选项页确认快捷键显示 `Alt+W`；从非默认分组按 `Alt+W` → 默认分组展开并激活 MRU。到 `chrome://extensions/shortcuts` 改键后回到选项页，显示应刷新；关闭总开关后快捷键不应改写标签页。
 11. 重复默认分组：制造两个同名默认分组（崩溃恢复 + 外部链接新建，或在 DevTools 里复制分组），触发归一化 → 所有标签页合并到一个分组、另一个消失；被合并清空的分组不会因钉住保护重建。钉住该默认分组时再验证一次。
+12. 钉住重复分组：同时制造两个同标题同色的钉住分组（或先让扩展重建空白分组，再打开保存的同名同色分组）→ 自动合并为一个，保留标签页更多的分组；删除被清空的分组不会补空白。关闭其中一个钉住分组时，另一个同身份分组仍存活 → 不新建空白，焦点切到存活分组。
 
 检查扩展页 `chrome://extensions` 无 runtime error；不要把 URL 加进日志来“调试分类”。
+
+## 外部限制跟踪
+
+- [Chromium issue 374592179](https://issues.chromium.org/issues/374592179)：Saved Tab Groups 尚未提供扩展 API。当前 `chrome.tabGroups` 只有 `get` / `move` / `query` / `update`，不能枚举或打开已保存分组。若上游提供打开/枚举 API，优先改造 `attemptPinnedRestore` 的空白重建分支；在此之前只复用/合并已经 live 的分组。
 
 ## 发布
 
 - 版本号唯一来源是 `manifest.json`；发布前同步更新 `CHANGELOG.md`。
 - tag 必须是 `v<version>`。推 tag 触发 `.github/workflows/release.yml`：`npm test`、版本校验、打包 `tabgroup-manager-<version>.zip` 和 `.sha256`，然后创建或更新 GitHub Release。
-- zip 只包含 `manifest.json`、`src/`、`icons/`、`README.md`、`CHANGELOG.md`；不包含 `test/`、`agent.md` 和开发文件。
+- zip 只包含 `manifest.json`、`src/`、`_locales/`、`icons/`、`README.md`、`README.en.md`、`CHANGELOG.md`；不包含 `test/`、`agent.md` 和开发文件。
 
 ## 已踩过的坑
 

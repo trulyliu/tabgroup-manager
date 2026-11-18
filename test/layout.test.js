@@ -11,6 +11,7 @@ import {
   pickGroupTab,
   planCollapse,
   planDefaultGroupMerge,
+  planGroupMerge,
   planGroupOrder,
   planNewTabTarget,
 } from "../src/lib/layout.js";
@@ -237,6 +238,19 @@ test("planDefaultGroupMerge ignores empty duplicate groups", () => {
   const groups = [group(1, "其他"), group(2, "其他")];
   const tabs = [tab(10, 0, 1)];
   assert.equal(planDefaultGroupMerge({ tabs, groups, title: "其他" }), null);
+});
+
+test("planGroupMerge filters by pinned title and color", () => {
+  const groups = [group(1, "Pinned", "blue"), group(2, "Pinned", "blue"), group(3, "Pinned", "red")];
+  const tabs = [tab(10, 0, 1), tab(11, 1, 1), tab(12, 2, 2), tab(13, 3, 3)];
+  assert.deepEqual(
+    planGroupMerge({ tabs, groups, title: "Pinned", color: "blue" }),
+    {
+      canonicalId: 1,
+      sources: [{ groupId: 2, tabIds: [12] }],
+    },
+  );
+  assert.equal(planGroupMerge({ tabs, groups, title: "Pinned", color: "green" }), null);
 });
 
 

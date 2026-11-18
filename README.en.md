@@ -64,7 +64,8 @@ When activating a pinned tab:
 Configure pinned groups in the options page. Pinned group identity is defined by **title + color** (case-sensitive exact match):
 
 - The list order in options is the tab strip order.
-- Closing the last tab or deleting the group automatically recreates a group with the same title and color containing one inactive `chrome://newtab/` page. Real closed tabs are not reopened.
+- Closing the last tab or deleting the group reuses a live group with the same title and color when one exists (for example a saved group Chrome has reopened). Otherwise it recreates the group with one inactive `chrome://newtab/` page. Real closed tabs are not reopened.
+- If multiple live groups share the pinned identity, normalization merges them into one, preferring the group with more tabs and the most recently used group; a group emptied by the merge is not resurrected.
 - Moving a pinned group to another window or closing the entire window does not trigger empty placeholder recreation.
 - Renaming or changing the color of a group removes its pinned status until re-pinned or updated in options.
 
@@ -106,6 +107,7 @@ Settings are synchronized across devices using `chrome.storage.sync`.
 
 - Chrome does not permit extensions to pin tab group headers directly to the tab strip or position groups to the left of pinned tabs.
 - Chrome does not have an API to veto group deletion; pinned groups are preserved via automatic resurrection with a placeholder blank tab.
+- Chrome's saved tab groups are invisible to extensions and there is no API to open them. Closing a pinned group cannot automatically open Chrome's saved copy; after you open that saved group manually, the extension reuses and merges it. Tracked in Chromium issue 374592179: https://issues.chromium.org/issues/374592179
 - Modifying shortcuts requires visiting Chrome's shortcut configuration page (`chrome://extensions/shortcuts`).
 
 ## Development

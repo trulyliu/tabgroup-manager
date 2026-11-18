@@ -56,15 +56,17 @@ function groupStats(tabs, groupId) {
 }
 
 /**
- * A crash-restore window can end up with two groups carrying the default
- * title: the restored one and one the extension created for an externally
- * opened tab before Chrome finished restoring. Pick one canonical group and
- * report every other group's tabs so the caller can merge them in place.
+ * A crash restore can leave two groups with the same identity: the restored
+ * one and one the extension created before Chrome finished restoring. Pick one
+ * canonical group and report every other group's tabs so the caller can merge
+ * them in place. `color` narrows the match for pinned groups; omit it for the
+ * title-only default-group repair.
  */
-export function planDefaultGroupMerge({
+export function planGroupMerge({
   tabs = [],
   groups = [],
   title,
+  color = null,
   rememberedId = null,
 } = {}) {
   if (typeof title !== "string" || title === "") return null;
@@ -72,6 +74,7 @@ export function planDefaultGroupMerge({
   const live = [];
   for (const group of groups ?? []) {
     if (group?.title !== title) continue;
+    if (color != null && group.color !== color) continue;
     const entry = groupStats(tabs, group.id);
     stats.set(group.id, entry);
     if (entry.tabIds.length > 0) live.push(group);
@@ -92,6 +95,10 @@ export function planDefaultGroupMerge({
     .map((group) => ({ groupId: group.id, tabIds: rank(group).tabIds }));
   if (sources.length === 0) return null;
   return { canonicalId: canonical.id, sources };
+}
+
+export function planDefaultGroupMerge(args = {}) {
+  return planGroupMerge(args);
 }
 
 /** Group with the freshest tab; survives service-worker restarts. */
